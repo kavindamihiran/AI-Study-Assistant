@@ -3,18 +3,29 @@
 import { Check, Database, KeyRound, Save, Server, SlidersHorizontal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
-import { ModelProfile, getActiveProfile, getProfiles, switchProfile } from "@/lib/api";
+import {
+  ModelProfile,
+  SystemStatus,
+  getActiveProfile,
+  getProfiles,
+  getSystemStatus,
+  switchProfile,
+} from "@/lib/api";
 
 export default function SettingsPage() {
   const [profiles, setProfiles] = useState<ModelProfile[]>([]);
   const [activeId, setActiveId] = useState("");
   const [saved, setSaved] = useState(false);
+  const [system, setSystem] = useState<SystemStatus | null>(null);
 
   useEffect(() => {
-    void Promise.all([getProfiles(), getActiveProfile()]).then(([items, active]) => {
-      setProfiles(items);
-      setActiveId(active.profile_id);
-    });
+    void Promise.all([getProfiles(), getActiveProfile(), getSystemStatus()]).then(
+      ([items, active, systemStatus]) => {
+        setProfiles(items);
+        setActiveId(active.profile_id);
+        setSystem(systemStatus);
+      },
+    );
   }, []);
 
   async function save() {
@@ -87,17 +98,19 @@ export default function SettingsPage() {
             {
               icon: Server,
               title: "FastAPI backend",
-              text: "Connected on port 8000",
+              text: system?.status === "ready" ? "Connected and ready" : "Checking status",
             },
             {
               icon: Database,
-              title: "Vector database",
-              text: "Not configured yet",
+              title: `Database · ${system?.database_backend ?? "loading"}`,
+              text: system?.database ?? "Checking database",
             },
             {
               icon: KeyRound,
-              title: "Provider credentials",
-              text: "Stored server-side only",
+              title: `Vectors · ${system?.vector_store ?? "loading"}`,
+              text: system
+                ? `${system.embedding_model} · ${system.embedding_dimension} dimensions`
+                : "Checking vector store",
             },
           ].map((item) => (
             <div

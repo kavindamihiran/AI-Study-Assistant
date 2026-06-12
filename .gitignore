@@ -24,7 +24,9 @@ backend/data/
 backend/.tmp/
 backend/.tmp-api/
 backend/tests/.tmp/
+backend/tests/.runtime-data/
 backend/pytest-cache-files-*/
+backend/data/
 
 # Node / Next.js
 node_modules/

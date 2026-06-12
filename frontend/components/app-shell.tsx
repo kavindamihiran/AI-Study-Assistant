@@ -13,12 +13,16 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useState } from "react";
+import { useChatWorkspace } from "@/components/chat-provider";
+import { useStudyJobs } from "@/components/study-job-provider";
+import { useStudyWorkspace } from "@/components/study-workspace-provider";
 
 const workspaceItems = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
@@ -63,7 +67,48 @@ function NavLink({
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [mobileNav, setMobileNav] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(true);
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(
+    null,
+  );
+  const router = useRouter();
+  const { startNewSession } = useChatWorkspace();
+  const { clearJobs } = useStudyJobs();
+  const {
+    activeWorkspace,
+    createWorkspace,
+    deleteWorkspace,
+    switchWorkspace,
+    workspaces,
+  } = useStudyWorkspace();
   const closeNav = () => setMobileNav(false);
+
+  async function newStudySession() {
+    await createWorkspace(`Study session ${workspaces.length + 1}`);
+    startNewSession();
+    clearJobs();
+    closeNav();
+    router.push("/chat");
+  }
+
+  async function removeStudySession(workspaceId: string, title: string) {
+    const confirmed = window.confirm(
+      `Delete "${title}" and all its uploaded documents, chats, and study outputs?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setDeletingWorkspaceId(workspaceId);
+    try {
+      await deleteWorkspace(workspaceId);
+      startNewSession();
+      clearJobs();
+      closeNav();
+      router.push("/chat");
+    } finally {
+      setDeletingWorkspaceId(null);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#f5f7f6] text-[#18251f]">
@@ -75,11 +120,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[250px] border-r border-white/10 bg-[#10251c] px-4 py-5 text-white transition-transform lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[290px] flex-col overflow-hidden border-r border-white/10 bg-[#10251c] px-4 py-5 text-white transition-transform lg:translate-x-0 ${
           mobileNav ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between px-2">
+        <div className="flex shrink-0 items-center justify-between px-2">
           <Link href="/" className="flex items-center gap-3" onClick={closeNav}>
             <div className="grid size-10 place-items-center rounded-xl bg-[#c8f169] text-[#17321f] shadow-[0_8px_24px_rgba(200,241,105,0.22)]">
               <GraduationCap size={22} strokeWidth={2.4} />
@@ -100,34 +145,94 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <Link
-          href="/chat"
-          onClick={closeNav}
-          className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c8f169] px-4 py-3 text-sm font-semibold text-[#17321f] transition hover:bg-[#d5f58a]"
-        >
-          <Plus size={17} />
-          New study session
-        </Link>
+        <div className="mt-6 min-h-0 flex-1 overflow-y-auto pr-1">
+          <button
+            onClick={() => void newStudySession()}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#c8f169] px-4 py-3 text-sm font-semibold text-[#17321f] transition hover:bg-[#d5f58a]"
+          >
+            <Plus size={17} />
+            New study session
+          </button>
 
-        <nav className="mt-7 space-y-1">
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
-            Workspace
-          </p>
-          {workspaceItems.map((item) => (
-            <NavLink key={item.href} {...item} onNavigate={closeNav} />
-          ))}
-        </nav>
+          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.055] p-3">
+            <button
+              onClick={() => setSessionsOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-2 px-1 text-left"
+            >
+              <span className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                  Subject sessions
+                </span>
+                <span className="mt-2 block break-words text-xs font-semibold leading-5 text-white">
+                  {activeWorkspace?.title ?? "Loading session..."}
+                </span>
+              </span>
+              <ChevronDown
+                size={15}
+                className={`shrink-0 text-white/45 transition ${
+                  sessionsOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {sessionsOpen && (
+              <div className="mt-3 max-h-52 space-y-1 overflow-y-auto">
+                {workspaces.map((workspace) => (
+                  <div
+                    key={workspace.id}
+                    className={`flex items-center gap-2 rounded-xl border px-2 py-2 ${
+                      workspace.id === activeWorkspace?.id
+                        ? "border-white/10 bg-white/10 text-white"
+                        : "border-transparent text-white/60 hover:border-white/10 hover:bg-white/5 hover:text-white"
+                    }`}
+                  >
+                    <button
+                      onClick={() => {
+                        switchWorkspace(workspace.id);
+                        startNewSession();
+                        clearJobs();
+                        closeNav();
+                      }}
+                      className="min-w-0 flex-1 break-words text-left text-xs leading-5"
+                    >
+                      {workspace.title}
+                    </button>
+                    <button
+                      onClick={() =>
+                        void removeStudySession(workspace.id, workspace.title)
+                      }
+                      disabled={deletingWorkspaceId === workspace.id}
+                      className="grid size-8 shrink-0 place-items-center rounded-lg border border-red-300/20 bg-red-400/10 text-red-100 transition hover:border-red-200/45 hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Delete ${workspace.title}`}
+                      title={`Delete ${workspace.title}`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <nav className="mt-7 space-y-1">
-          <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
-            Manage
-          </p>
-          {manageItems.map((item) => (
-            <NavLink key={item.href} {...item} onNavigate={closeNav} />
-          ))}
-        </nav>
+          <nav className="mt-6 space-y-1">
+            <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
+              Workspace
+            </p>
+            {workspaceItems.map((item) => (
+              <NavLink key={item.href} {...item} onNavigate={closeNav} />
+            ))}
+          </nav>
 
-        <div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+          <nav className="mt-6 space-y-1">
+            <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
+              Manage
+            </p>
+            {manageItems.map((item) => (
+              <NavLink key={item.href} {...item} onNavigate={closeNav} />
+            ))}
+          </nav>
+        </div>
+
+        <div className="mt-4 shrink-0 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
           <div className="flex items-center gap-2 text-xs font-medium">
             <ShieldCheck size={15} className="text-[#c8f169]" />
             Gateway protected
@@ -138,7 +243,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <section className="lg:pl-[250px]">
+      <section className="lg:pl-[290px]">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#dfe5e1] bg-[#f5f7f6]/90 px-5 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             <button
@@ -211,4 +316,3 @@ export function PageHeading({
     </div>
   );
 }
-

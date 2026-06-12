@@ -25,6 +25,7 @@ class LLMTransport(Protocol):
 class OpenAICompatibleTransport:
     def __init__(self, *, timeout_seconds: float = 90.0) -> None:
         self.timeout_seconds = timeout_seconds
+        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def _api_key(self, profile: ModelProfile) -> str:
         api_key = os.getenv(profile.api_key_env_name)
@@ -52,7 +53,7 @@ class OpenAICompatibleTransport:
         self, profile: ModelProfile, body: dict[str, Any]
     ) -> dict[str, Any]:
         try:
-            with urllib.request.urlopen(
+            with self._opener.open(
                 self._request(profile, body), timeout=self.timeout_seconds
             ) as response:
                 response_body = response.read().decode("utf-8")
@@ -88,7 +89,7 @@ class OpenAICompatibleTransport:
 
         def read_events() -> None:
             try:
-                with urllib.request.urlopen(
+                with self._opener.open(
                     self._request(profile, request_body),
                     timeout=self.timeout_seconds,
                 ) as response:

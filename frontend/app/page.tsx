@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Activity,
   ArrowRight,
@@ -10,7 +12,15 @@ import {
   WandSparkles,
 } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import {
+  DocumentRecord,
+  ModelProfile,
+  getActiveProfile,
+  getDocuments,
+  getProfiles,
+} from "@/lib/api";
 
 const quickActions = [
   {
@@ -37,6 +47,29 @@ const quickActions = [
 ];
 
 export default function OverviewPage() {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
+  const [activeProfile, setActiveProfile] = useState<ModelProfile | null>(null);
+
+  useEffect(() => {
+    void Promise.all([getDocuments(), getProfiles(), getActiveProfile()])
+      .then(([indexedDocuments, modelProfiles, active]) => {
+        setDocuments(indexedDocuments);
+        setProfiles(modelProfiles);
+        setActiveProfile(active);
+      })
+      .catch(() => {
+        setDocuments([]);
+        setProfiles([]);
+        setActiveProfile(null);
+      });
+  }, []);
+
+  const totalChunks = documents.reduce(
+    (total, document) => total + document.chunk_count,
+    0,
+  );
+
   return (
     <AppShell>
       <PageHeading
@@ -55,26 +88,26 @@ export default function OverviewPage() {
         {[
           {
             label: "Documents",
-            value: "0",
-            note: "Ready for your first upload",
+            value: String(documents.length),
+            note: documents.length ? "Indexed and searchable" : "Ready for your first upload",
             icon: FileText,
           },
           {
-            label: "Study sessions",
-            value: "0",
-            note: "Start a grounded chat",
+            label: "Indexed chunks",
+            value: String(totalChunks),
+            note: "Available for grounded chat",
             icon: BookOpen,
           },
           {
             label: "Model profiles",
-            value: "5",
+            value: String(profiles.length),
             note: "Switch through one gateway",
             icon: Sparkles,
           },
           {
-            label: "Gateway",
-            value: "Protected",
-            note: "Reasoning stays private",
+            label: "Active model",
+            value: activeProfile?.display_name ?? "Loading",
+            note: activeProfile?.model_id ?? "Checking gateway",
             icon: ShieldCheck,
           },
         ].map((item) => (
