@@ -21,7 +21,7 @@ cd backend
 python -m venv .venv-api
 .\.venv-api\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --env-file .env
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ```powershell
@@ -31,6 +31,11 @@ npm run dev -- --hostname 127.0.0.1 --port 3200
 ```
 
 Open `http://127.0.0.1:3200`.
+
+Backend secrets live in `backend/.env.local`. The API loads `.env`,
+`.env.local`, `backend/.env`, and `backend/.env.local` automatically, with
+`.env.local` values taking precedence over `.env` files. Keep NVIDIA NIM keys
+out of `frontend/.env.local`; frontend variables are browser-facing.
 
 ## Database
 

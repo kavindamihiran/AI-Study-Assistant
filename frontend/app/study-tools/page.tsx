@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { MarkdownText } from "@/components/markdown-text";
+import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
   FlashcardItem,
@@ -41,12 +42,15 @@ export default function StudyToolsPage() {
   const [error, setError] = useState("");
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const { jobs, selectedJob, enqueue, selectJob } = useStudyJobs();
+  const { activeWorkspace } = useStudyWorkspace();
   const activeJobs = jobs.filter(
     (job) => job.status === "queued" || job.status === "running",
   );
 
   useEffect(() => {
-    void Promise.all([getActiveProfile(), getDocuments()])
+    if (!activeWorkspace) return;
+    setLoadingDocuments(true);
+    void Promise.all([getActiveProfile(), getDocuments(activeWorkspace.id)])
       .then(([activeProfile, uploadedDocuments]) => {
         const indexed = uploadedDocuments.filter(
           (document) => document.status === "indexed",
@@ -63,7 +67,7 @@ export default function StudyToolsPage() {
         );
       })
       .finally(() => setLoadingDocuments(false));
-  }, []);
+  }, [activeWorkspace?.id]);
 
   useEffect(() => {
     if (!selectedJob) return;
@@ -100,7 +104,7 @@ export default function StudyToolsPage() {
       <PageHeading
         section="Study tools"
         title="Turn topics into practice"
-        description="Create summaries, questions, flashcards, and plans grounded in your uploaded PDFs."
+        description={`Create summaries, questions, flashcards, and plans from ${activeWorkspace?.title ?? "this study session"}.`}
       />
       <div className="mt-7 grid gap-6 xl:grid-cols-[320px_1fr]">
         <div className="space-y-6">

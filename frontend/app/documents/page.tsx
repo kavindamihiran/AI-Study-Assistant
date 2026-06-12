@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
   deleteDocument,
@@ -40,10 +41,12 @@ export default function DocumentsPage() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const { activeWorkspace } = useStudyWorkspace();
 
   async function refreshDocuments() {
+    if (!activeWorkspace) return;
     try {
-      setDocuments(await getDocuments());
+      setDocuments(await getDocuments(activeWorkspace.id));
       setLoadError("");
     } catch (error) {
       setLoadError(
@@ -56,7 +59,7 @@ export default function DocumentsPage() {
 
   useEffect(() => {
     void refreshDocuments();
-  }, []);
+  }, [activeWorkspace?.id]);
 
   async function addFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -70,7 +73,7 @@ export default function DocumentsPage() {
         { id: uploadId, filename: file.name, status: "uploading" },
       ]);
       try {
-        const document = await uploadDocument(file);
+        const document = await uploadDocument(file, activeWorkspace?.id);
         setDocuments((current) => [
           document,
           ...current.filter((item) => item.id !== document.id),
@@ -145,8 +148,8 @@ export default function DocumentsPage() {
     <AppShell>
       <PageHeading
         section="Documents"
-        title="Build your study library"
-        description="Upload PDFs, text, Markdown, or DOCX notes. Text is extracted and chunked locally, then becomes available to grounded chat immediately."
+        title="Build this session library"
+        description={`Upload material for ${activeWorkspace?.title ?? "this study session"}. Each subject session keeps its own documents.`}
         action={
           <button
             onClick={() => inputRef.current?.click()}

@@ -1,13 +1,26 @@
 "use client";
 
-import { Bot, FileText, RotateCcw, Send, Sparkles, User } from "lucide-react";
+import {
+  Bot,
+  FileText,
+  History,
+  RefreshCcw,
+  RotateCcw,
+  Send,
+  Sparkles,
+  User,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { useChatWorkspace } from "@/components/chat-provider";
 import { MarkdownText } from "@/components/markdown-text";
+import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
   ModelProfile,
+  ChatSessionSummary,
+  getChatSession,
+  getChatSessions,
   getActiveProfile,
   getDocuments,
 } from "@/lib/api";
@@ -15,32 +28,59 @@ import {
 export default function ChatPage() {
   const [profile, setProfile] = useState<ModelProfile | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
   const [input, setInput] = useState("");
-  const [sourcesInitialized, setSourcesInitialized] = useState(false);
   const {
     clearMessages,
+    initializeDocumentSelection,
+    loadSession,
     messages,
     selectedDocumentIds,
+    sessionId,
     sending,
     sendMessage,
     setSelectedDocumentIds,
+    sourceSelectionInitialized,
   } = useChatWorkspace();
+  const { activeWorkspace } = useStudyWorkspace();
 
   useEffect(() => {
-    void Promise.all([getActiveProfile(), getDocuments()])
+    if (!activeWorkspace) return;
+    void Promise.all([getActiveProfile(), getDocuments(activeWorkspace.id)])
       .then(([active, indexedDocuments]) => {
         setProfile(active);
         setDocuments(indexedDocuments);
-        if (!sourcesInitialized && indexedDocuments.length) {
-          setSelectedDocumentIds(indexedDocuments.map((document) => document.id));
-          setSourcesInitialized(true);
+        if (!sourceSelectionInitialized && indexedDocuments.length) {
+          initializeDocumentSelection(indexedDocuments.map((document) => document.id));
         }
       })
       .catch(() => {
         setProfile(null);
         setDocuments([]);
       });
-  }, [setSelectedDocumentIds, sourcesInitialized]);
+  }, [activeWorkspace?.id, initializeDocumentSelection, sourceSelectionInitialized]);
+
+  async function refreshSessions() {
+    setLoadingSessions(true);
+    try {
+      setSessions(await getChatSessions(activeWorkspace?.id));
+    } finally {
+      setLoadingSessions(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!sending) {
+      void refreshSessions();
+    }
+  }, [activeWorkspace?.id, sending]);
+
+  async function openSavedSession(savedSessionId: string) {
+    if (sending) return;
+    const saved = await getChatSession(savedSessionId);
+    loadSession(saved);
+  }
 
   function toggleDocument(documentId: string) {
     setSelectedDocumentIds(
@@ -54,7 +94,7 @@ export default function ChatPage() {
     const prompt = input.trim();
     if (!prompt || sending) return;
     setInput("");
-    sendMessage(prompt, selectedDocumentIds);
+    sendMessage(prompt, selectedDocumentIds, activeWorkspace?.id);
   }
 
   return (
@@ -62,7 +102,7 @@ export default function ChatPage() {
       <PageHeading
         section="Chat with notes"
         title="Ask your uploaded material"
-        description="Questions are matched against locally indexed chunks. The model receives only retrieved note content, and citations come from the backend."
+        description={`Questions are matched against documents in ${activeWorkspace?.title ?? "this study session"}.`}
         action={
           <div className="rounded-full border border-[#dfe5e1] bg-white px-3 py-1.5 text-xs text-[#65736c]">
             {profile?.display_name ?? "Loading active model..."}
@@ -185,6 +225,53 @@ export default function ChatPage() {
         </section>
 
         <aside className="space-y-4">
+          <div className="rounded-2xl border border-[#dfe5e1] bg-white p-5">
+            <History size={18} className="text-[#648b47]" />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Saved sessions</h2>
+                <p className="mt-1 text-[11px] leading-5 text-[#849089]">
+                  Reopen previous conversations anytime.
+                </p>
+              </div>
+              <button
+                onClick={() => void refreshSessions()}
+                className="rounded-lg p-2 text-[#65736c] hover:bg-[#f3f6f3]"
+                aria-label="Refresh sessions"
+              >
+                <RefreshCcw
+                  size={15}
+                  className={loadingSessions ? "animate-spin" : ""}
+                />
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {!sessions.length && (
+                <p className="rounded-xl bg-[#f7f9f7] p-3 text-xs text-[#89948e]">
+                  No saved sessions yet.
+                </p>
+              )}
+              {sessions.slice(0, 8).map((savedSession) => (
+                <button
+                  key={savedSession.id}
+                  onClick={() => void openSavedSession(savedSession.id)}
+                  disabled={sending}
+                  className={`w-full rounded-xl border p-3 text-left transition disabled:opacity-50 ${
+                    savedSession.id === sessionId
+                      ? "border-[#9ab68d] bg-[#f2f8ed]"
+                      : "border-[#e2e7e4] hover:bg-[#f7f9f7]"
+                  }`}
+                >
+                  <span className="block truncate text-xs font-semibold text-[#263b30]">
+                    {savedSession.title}
+                  </span>
+                  <span className="mt-1 block truncate text-[9px] text-[#89948e]">
+                    {savedSession.active_model_profile_id ?? "saved chat"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="rounded-2xl border border-[#dfe5e1] bg-white p-5">
             <FileText size={18} className="text-[#648b47]" />
             <h2 className="mt-3 text-sm font-semibold">Answer sources</h2>

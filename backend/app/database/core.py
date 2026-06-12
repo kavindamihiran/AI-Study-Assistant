@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, event, text
+from sqlalchemy import Engine, create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base
@@ -47,6 +47,27 @@ class Database:
 
     def initialize(self) -> None:
         Base.metadata.create_all(self.engine)
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        inspector = inspect(self.engine)
+        table_names = set(inspector.get_table_names())
+        with self.engine.begin() as connection:
+            if "documents" in table_names:
+                columns = {column["name"] for column in inspector.get_columns("documents")}
+                if "study_session_id" not in columns:
+                    connection.execute(
+                        text("ALTER TABLE documents ADD COLUMN study_session_id VARCHAR(64)")
+                    )
+            if "chat_sessions" in table_names:
+                columns = {
+                    column["name"]
+                    for column in inspector.get_columns("chat_sessions")
+                }
+                if "study_session_id" not in columns:
+                    connection.execute(
+                        text("ALTER TABLE chat_sessions ADD COLUMN study_session_id VARCHAR(64)")
+                    )
 
     @contextmanager
     def session(self) -> Iterator[Session]:

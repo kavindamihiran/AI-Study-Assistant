@@ -7,6 +7,7 @@ from .models import (
     DocumentChunkModel,
     DocumentModel,
     ModelRunModel,
+    StudySessionModel,
 )
 
 __all__ = [
@@ -18,5 +19,5 @@ __all__ = [
     "DocumentChunkModel",
     "DocumentModel",
     "ModelRunModel",
+    "StudySessionModel",
 ]
-

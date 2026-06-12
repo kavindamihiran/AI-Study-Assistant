@@ -8,7 +8,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.config import Settings
-from app.database import ChunkEmbeddingModel, DocumentChunkModel, DocumentModel
+from app.database import (
+    ChatSessionModel,
+    ChunkEmbeddingModel,
+    DocumentChunkModel,
+    DocumentModel,
+    ModelRunModel,
+)
 from app.documents.extraction import (
     DocumentExtractionError,
     chunk_sections,
@@ -152,6 +158,53 @@ class DocumentStoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIn("Normalization", chunks[0]["text"])
 
+    async def test_deletes_study_session_documents_and_chats(self) -> None:
+        workspace = self.store.create_study_session("Databases")
+        document = await self.store.ingest(
+            filename="database.txt",
+            content_type="text/plain",
+            content=b"Normalization reduces update anomalies.",
+            study_session_id=workspace["id"],
+        )
+        session_id = self.store.ensure_chat_session(
+            session_id=None,
+            query="Explain normalization",
+            profile_id="test_profile",
+            study_session_id=workspace["id"],
+        )
+        self.store.add_chat_message(
+            session_id=session_id,
+            role="user",
+            content="Explain normalization",
+        )
+        self.store.record_model_run(
+            session_id=session_id,
+            profile_id="test_profile",
+            latency_ms=1,
+            input_tokens=1,
+            output_tokens=1,
+            status="success",
+            error_message=None,
+            retry_count=0,
+        )
+
+        self.assertEqual(len(self.store.list_documents(workspace["id"])), 1)
+        self.assertTrue(await self.store.delete_study_session(workspace["id"]))
+        self.assertFalse((self.store.uploads_dir / f"{document['id']}.txt").exists())
+        with self.store.database.session() as session:
+            self.assertEqual(
+                session.scalar(select(func.count()).select_from(DocumentModel)),
+                0,
+            )
+            self.assertEqual(
+                session.scalar(select(func.count()).select_from(ChatSessionModel)),
+                0,
+            )
+            self.assertEqual(
+                session.scalar(select(func.count()).select_from(ModelRunModel)),
+                0,
+            )
+
 
 class DocumentApiTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -245,3 +298,56 @@ class DocumentApiTests(unittest.TestCase):
         )
         self.assertEqual(flashcards.status_code, 200)
         self.assertIn("normalization", flashcards.json()["data"]["items"][0]["front"].lower())
+
+    def test_delete_study_session_removes_scoped_material(self) -> None:
+        workspace = self.client.post(
+            "/api/study-sessions",
+            json={"title": "Databases"},
+        ).json()
+        uploaded = self.client.post(
+            "/api/documents/upload",
+            data={"study_session_id": workspace["id"]},
+            files={
+                "file": (
+                    "lecture.txt",
+                    b"Normalization reduces database update anomalies.",
+                    "text/plain",
+                )
+            },
+        ).json()
+        chat = self.client.post(
+            "/api/chat",
+            json={
+                "query": "What does normalization reduce?",
+                "document_ids": [uploaded["id"]],
+                "study_session_id": workspace["id"],
+            },
+        )
+        self.assertEqual(chat.status_code, 200)
+        self.assertEqual(
+            len(
+                self.client.get(
+                    f"/api/documents?study_session_id={workspace['id']}"
+                ).json()["documents"]
+            ),
+            1,
+        )
+
+        deleted = self.client.delete(f"/api/study-sessions/{workspace['id']}")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertEqual(
+            self.client.get(f"/api/study-sessions/{workspace['id']}").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/api/documents?study_session_id={workspace['id']}"
+            ).json()["documents"],
+            [],
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/api/chat/sessions?study_session_id={workspace['id']}"
+            ).json()["sessions"],
+            [],
+        )

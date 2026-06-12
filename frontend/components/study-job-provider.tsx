@@ -44,6 +44,7 @@ type StudyJobContextValue = {
   selectedJob: StudyJob | null;
   enqueue: (input: EnqueueStudyJob) => string;
   selectJob: (jobId: string | null) => void;
+  clearJobs: () => void;
 };
 
 const STORAGE_KEY = "studyos.study-jobs.v1";
@@ -185,11 +186,16 @@ export function StudyJobProvider({ children }: { children: ReactNode }) {
     setSelectedJobId(jobId);
   }, []);
 
+  const clearJobs = useCallback(() => {
+    setJobs([]);
+    setSelectedJobId(null);
+  }, []);
+
   const selectedJob =
     jobs.find((job) => job.id === selectedJobId) ?? jobs[0] ?? null;
   const value = useMemo(
-    () => ({ jobs, selectedJob, enqueue, selectJob }),
-    [enqueue, jobs, selectJob, selectedJob],
+    () => ({ jobs, selectedJob, enqueue, selectJob, clearJobs }),
+    [clearJobs, enqueue, jobs, selectJob, selectedJob],
   );
 
   return (
@@ -239,7 +245,7 @@ function GlobalJobStatus({
     <Link
       href="/study-tools"
       onClick={() => selectJob(latest.id)}
-      className="fixed bottom-5 right-5 z-50 flex max-w-[330px] items-center gap-3 rounded-2xl border border-[#d9e3dc] bg-white px-4 py-3 shadow-[0_16px_45px_rgba(21,43,31,0.18)] transition hover:-translate-y-0.5"
+      className="fixed bottom-5 left-5 right-5 z-50 flex items-center gap-3 rounded-2xl border border-[#d9e3dc] bg-white px-4 py-3 shadow-[0_16px_45px_rgba(21,43,31,0.18)] transition hover:-translate-y-0.5 sm:left-auto sm:max-w-[330px]"
     >
       <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eef5ea] text-[#477238]">
         {latest.status === "running" && (

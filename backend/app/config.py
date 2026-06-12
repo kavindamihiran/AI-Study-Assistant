@@ -17,6 +17,40 @@ DEFAULT_EMBEDDING_DIMENSION = 384
 DEFAULT_NVIDIA_EMBEDDING_MODEL_ID = "nvidia/llama-nemotron-embed-1b-v2"
 
 
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        return None
+    key, value = stripped.split("=", 1)
+    key = key.strip()
+    value = value.strip().strip('"').strip("'")
+    if not key:
+        return None
+    return key, value
+
+
+def load_local_env_files() -> None:
+    """Load local env files without overriding real process environment."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    project_dir = backend_dir.parent
+    env_values: dict[str, str] = {}
+    for env_path in (
+        project_dir / ".env",
+        project_dir / ".env.local",
+        backend_dir / ".env",
+        backend_dir / ".env.local",
+    ):
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            parsed = _parse_env_line(line)
+            if parsed is not None:
+                key, value = parsed
+                env_values[key] = value
+    for key, value in env_values.items():
+        os.environ.setdefault(key, value)
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     active_model_profile_id: str = DEFAULT_ACTIVE_PROFILE_ID
@@ -36,6 +70,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        load_local_env_files()
         profiles_path = os.getenv("MODEL_PROFILES_PATH")
         data_dir = os.getenv("DATA_DIR")
         return cls(

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
 
 from app.documents.extraction import DocumentExtractionError, SUPPORTED_EXTENSIONS
 from app.documents.store import DocumentStore
@@ -14,8 +14,14 @@ def _store(request: Request) -> DocumentStore:
 
 
 @router.get("")
-async def list_documents(request: Request) -> dict:
-    return {"documents": _store(request).list_documents()}
+async def list_documents(
+    request: Request, study_session_id: str | None = None
+) -> dict:
+    return {
+        "documents": _store(request).list_documents(
+            study_session_id=study_session_id
+        )
+    }
 
 
 @router.get("/{document_id}")
@@ -30,6 +36,7 @@ async def get_document(document_id: str, request: Request) -> dict:
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
+    study_session_id: str | None = Form(default=None),
 ) -> dict:
     filename = file.filename or "document"
     extension = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -48,6 +55,7 @@ async def upload_document(
             filename=filename,
             content_type=file.content_type,
             content=content,
+            study_session_id=study_session_id,
         )
     except DocumentExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

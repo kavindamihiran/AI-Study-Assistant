@@ -14,6 +14,24 @@ class Base(DeclarativeBase):
     pass
 
 
+class StudySessionModel(Base):
+    __tablename__ = "study_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+    documents: Mapped[list["DocumentModel"]] = relationship(back_populates="study_session")
+    chat_sessions: Mapped[list["ChatSessionModel"]] = relationship(
+        back_populates="study_session"
+    )
+
+
 class DocumentModel(Base):
     __tablename__ = "documents"
 
@@ -23,6 +41,10 @@ class DocumentModel(Base):
     content_type: Mapped[str | None] = mapped_column(String(255))
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
+    study_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("study_sessions.id", ondelete="SET NULL"),
+        index=True,
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     stored_path: Mapped[str] = mapped_column(Text, nullable=False)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -39,6 +61,9 @@ class DocumentModel(Base):
         back_populates="document",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    study_session: Mapped[StudySessionModel | None] = relationship(
+        back_populates="documents"
     )
 
 
@@ -93,6 +118,10 @@ class ChatSessionModel(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     active_model_profile_id: Mapped[str | None] = mapped_column(String(128))
+    study_session_id: Mapped[str | None] = mapped_column(
+        ForeignKey("study_sessions.id", ondelete="SET NULL"),
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
@@ -104,6 +133,9 @@ class ChatSessionModel(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    study_session: Mapped[StudySessionModel | None] = relationship(
+        back_populates="chat_sessions"
     )
 
 
@@ -144,4 +176,3 @@ class ModelRunModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
-

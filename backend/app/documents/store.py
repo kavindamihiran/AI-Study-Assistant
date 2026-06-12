@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.database import (
@@ -18,6 +18,7 @@ from app.database import (
     DocumentChunkModel,
     DocumentModel,
     ModelRunModel,
+    StudySessionModel,
 )
 from app.rag.embeddings import EmbeddingProvider, HashingEmbeddingProvider
 from app.rag.vector_store import LocalSQLVectorStore, VectorMatch, VectorStore
@@ -66,6 +67,7 @@ def _document_dict(document: DocumentModel) -> dict[str, Any]:
         "content_type": document.content_type,
         "file_size": document.file_size,
         "title": document.title,
+        "study_session_id": document.study_session_id,
         "status": document.status,
         "chunk_count": document.chunk_count,
         "character_count": document.character_count,
@@ -135,6 +137,7 @@ class DocumentStore:
                     content_type=item.get("content_type"),
                     file_size=item.get("file_size", 0),
                     title=item.get("title") or Path(item["filename"]).stem,
+                    study_session_id=None,
                     status="processing",
                     stored_path=str(stored_path),
                     chunk_count=item.get("chunk_count", 0),
@@ -161,13 +164,144 @@ class DocumentStore:
                     )
         legacy_index.rename(legacy_index.with_suffix(".json.migrated"))
 
-    def list_documents(self) -> list[dict[str, Any]]:
+    def create_study_session(self, title: str | None = None) -> dict[str, Any]:
+        session_id = uuid.uuid4().hex
+        session_title = (title or "New study session").strip()[:120]
         with self.database.session() as session:
-            documents = list(
+            item = StudySessionModel(id=session_id, title=session_title)
+            session.add(item)
+        session_item = self.get_study_session(session_id)
+        if session_item is None:
+            raise RuntimeError("Study session disappeared after creation")
+        return session_item
+
+    def list_study_sessions(self) -> list[dict[str, Any]]:
+        with self.database.session() as session:
+            items = list(
                 session.scalars(
-                    select(DocumentModel).order_by(DocumentModel.created_at.desc())
+                    select(StudySessionModel).order_by(
+                        StudySessionModel.updated_at.desc()
+                    )
                 )
             )
+        return [
+            {
+                "id": item.id,
+                "title": item.title,
+                "created_at": item.created_at.isoformat(),
+                "updated_at": item.updated_at.isoformat(),
+            }
+            for item in items
+        ]
+
+    def get_study_session(self, study_session_id: str) -> dict[str, Any] | None:
+        with self.database.session() as session:
+            item = session.get(StudySessionModel, study_session_id)
+            if item is None:
+                return None
+            return {
+                "id": item.id,
+                "title": item.title,
+                "created_at": item.created_at.isoformat(),
+                "updated_at": item.updated_at.isoformat(),
+            }
+
+    def _is_default_study_session(self, study_session_id: str) -> bool:
+        with self.database.session() as session:
+            general = session.scalar(
+                select(StudySessionModel.id)
+                .where(StudySessionModel.title == "General study session")
+                .order_by(StudySessionModel.created_at.asc())
+                .limit(1)
+            )
+            if general:
+                return general == study_session_id
+            oldest = session.scalar(
+                select(StudySessionModel.id)
+                .order_by(StudySessionModel.created_at.asc())
+                .limit(1)
+            )
+            return oldest == study_session_id
+
+    async def delete_study_session(self, study_session_id: str) -> bool:
+        include_unassigned = self._is_default_study_session(study_session_id)
+        with self.database.session() as session:
+            study_session = session.get(StudySessionModel, study_session_id)
+            if study_session is None:
+                return False
+
+            document_filter = DocumentModel.study_session_id == study_session_id
+            chat_filter = ChatSessionModel.study_session_id == study_session_id
+            if include_unassigned:
+                document_filter = or_(
+                    document_filter,
+                    DocumentModel.study_session_id.is_(None),
+                )
+                chat_filter = or_(
+                    chat_filter,
+                    ChatSessionModel.study_session_id.is_(None),
+                )
+
+            documents = list(
+                session.scalars(
+                    select(DocumentModel).where(document_filter)
+                )
+            )
+            chat_session_ids = list(
+                session.scalars(
+                    select(ChatSessionModel.id).where(chat_filter)
+                )
+            )
+            document_ids = [document.id for document in documents]
+            stored_paths = [document.stored_path for document in documents]
+
+        for document_id in document_ids:
+            await asyncio.to_thread(self.vector_store.delete_document, document_id)
+
+        with self.database.session() as session:
+            if chat_session_ids:
+                session.execute(
+                    delete(ModelRunModel).where(
+                        ModelRunModel.session_id.in_(chat_session_ids)
+                    )
+                )
+                session.execute(
+                    delete(ChatSessionModel).where(
+                        ChatSessionModel.id.in_(chat_session_ids)
+                    )
+                )
+            if document_ids:
+                session.execute(
+                    delete(DocumentModel).where(DocumentModel.id.in_(document_ids))
+                )
+            session.execute(
+                delete(StudySessionModel).where(StudySessionModel.id == study_session_id)
+            )
+
+        for stored_path in stored_paths:
+            await asyncio.to_thread(Path(stored_path).unlink, missing_ok=True)
+        return True
+
+    def list_documents(
+        self, study_session_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        with self.database.session() as session:
+            statement = select(DocumentModel).order_by(
+                DocumentModel.created_at.desc()
+            )
+            if study_session_id:
+                if self._is_default_study_session(study_session_id):
+                    statement = statement.where(
+                        or_(
+                            DocumentModel.study_session_id == study_session_id,
+                            DocumentModel.study_session_id.is_(None),
+                        )
+                    )
+                else:
+                    statement = statement.where(
+                        DocumentModel.study_session_id == study_session_id
+                    )
+            documents = list(session.scalars(statement))
         return [_document_dict(document) for document in documents]
 
     def get_document(self, document_id: str) -> dict[str, Any] | None:
@@ -181,6 +315,7 @@ class DocumentStore:
         filename: str,
         content_type: str | None,
         content: bytes,
+        study_session_id: str | None = None,
     ) -> dict[str, Any]:
         document_id = uuid.uuid4().hex
         safe_name = Path(filename).name
@@ -209,6 +344,7 @@ class DocumentStore:
                     content_type=content_type,
                     file_size=len(content),
                     title=Path(safe_name).stem,
+                    study_session_id=study_session_id,
                     status="processing",
                     stored_path=str(stored_path),
                     chunk_count=len(chunks),
@@ -508,6 +644,7 @@ class DocumentStore:
         session_id: str | None,
         query: str,
         profile_id: str | None,
+        study_session_id: str | None = None,
     ) -> str:
         session_id = session_id or uuid.uuid4().hex
         with self.database.session() as session:
@@ -518,11 +655,14 @@ class DocumentStore:
                         id=session_id,
                         title=query[:80],
                         active_model_profile_id=profile_id,
+                        study_session_id=study_session_id,
                     )
                 )
             else:
                 chat_session.updated_at = datetime.now(UTC)
                 chat_session.active_model_profile_id = profile_id
+                if study_session_id:
+                    chat_session.study_session_id = study_session_id
         return session_id
 
     def add_chat_message(
@@ -580,20 +720,32 @@ class DocumentStore:
                 )
             )
 
-    def list_chat_sessions(self) -> list[dict[str, Any]]:
+    def list_chat_sessions(
+        self, study_session_id: str | None = None
+    ) -> list[dict[str, Any]]:
         with self.database.session() as session:
-            sessions = list(
-                session.scalars(
-                    select(ChatSessionModel).order_by(
-                        ChatSessionModel.updated_at.desc()
-                    )
-                )
+            statement = select(ChatSessionModel).order_by(
+                ChatSessionModel.updated_at.desc()
             )
+            if study_session_id:
+                if self._is_default_study_session(study_session_id):
+                    statement = statement.where(
+                        or_(
+                            ChatSessionModel.study_session_id == study_session_id,
+                            ChatSessionModel.study_session_id.is_(None),
+                        )
+                    )
+                else:
+                    statement = statement.where(
+                        ChatSessionModel.study_session_id == study_session_id
+                    )
+            sessions = list(session.scalars(statement))
         return [
             {
                 "id": item.id,
                 "title": item.title,
                 "active_model_profile_id": item.active_model_profile_id,
+                "study_session_id": item.study_session_id,
                 "created_at": item.created_at.isoformat(),
                 "updated_at": item.updated_at.isoformat(),
             }
@@ -616,6 +768,7 @@ class DocumentStore:
                 "id": chat_session.id,
                 "title": chat_session.title,
                 "active_model_profile_id": chat_session.active_model_profile_id,
+                "study_session_id": chat_session.study_session_id,
                 "messages": [
                     {
                         "id": message.id,

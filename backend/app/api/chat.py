@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     document_ids: list[str] | None = None
     profile_id: str | None = None
     session_id: str | None = None
+    study_session_id: str | None = None
 
 
 @router.post("")
@@ -28,6 +29,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         session_id=payload.session_id,
         query=payload.query,
         profile_id=profile_id,
+        study_session_id=payload.study_session_id,
     )
     store.add_chat_message(
         session_id=session_id,
@@ -128,9 +130,11 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
 
 
 @router.get("/sessions")
-async def list_chat_sessions(request: Request) -> dict:
+async def list_chat_sessions(
+    request: Request, study_session_id: str | None = None
+) -> dict:
     store: DocumentStore = request.app.state.document_store
-    return {"sessions": store.list_chat_sessions()}
+    return {"sessions": store.list_chat_sessions(study_session_id)}
 
 
 @router.get("/sessions/{session_id}")

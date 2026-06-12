@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Citation, chatWithDocuments } from "@/lib/api";
+import { ChatSessionDetail, Citation, chatWithDocuments } from "@/lib/api";
 
 export type ChatMessage = {
   id: string;
@@ -28,15 +28,24 @@ type ActiveChatRequest = {
   prompt: string;
   documentIds: string[];
   sessionId?: string;
+  studySessionId?: string | null;
 };
 
 type ChatContextValue = {
   messages: ChatMessage[];
   selectedDocumentIds: string[];
+  sourceSelectionInitialized: boolean;
   sessionId?: string;
   sending: boolean;
-  sendMessage: (prompt: string, documentIds: string[]) => void;
+  sendMessage: (
+    prompt: string,
+    documentIds: string[],
+    studySessionId?: string | null,
+  ) => void;
   setSelectedDocumentIds: (documentIds: string[]) => void;
+  initializeDocumentSelection: (documentIds: string[]) => void;
+  startNewSession: () => void;
+  loadSession: (session: ChatSessionDetail) => void;
   clearMessages: () => void;
 };
 
@@ -61,6 +70,8 @@ function createId() {
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([starterMessage]);
   const [selectedDocumentIds, setSelectedDocumentIdsState] = useState<string[]>([]);
+  const [sourceSelectionInitialized, setSourceSelectionInitialized] =
+    useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [activeRequest, setActiveRequest] = useState<ActiveChatRequest | null>(null);
   const [hydrated, setHydrated] = useState(false);
@@ -74,11 +85,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(saved) as {
           messages?: ChatMessage[];
           selectedDocumentIds?: string[];
+          sourceSelectionInitialized?: boolean;
           sessionId?: string;
           activeRequest?: ActiveChatRequest | null;
         };
         setMessages(parsed.messages?.length ? parsed.messages : [starterMessage]);
         setSelectedDocumentIdsState(parsed.selectedDocumentIds ?? []);
+        setSourceSelectionInitialized(parsed.sourceSelectionInitialized ?? false);
         setSessionId(parsed.sessionId);
         setActiveRequest(parsed.activeRequest ?? null);
       }
@@ -96,11 +109,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       JSON.stringify({
         messages,
         selectedDocumentIds,
+        sourceSelectionInitialized,
         sessionId,
         activeRequest,
       }),
     );
-  }, [activeRequest, hydrated, messages, selectedDocumentIds, sessionId]);
+  }, [
+    activeRequest,
+    hydrated,
+    messages,
+    selectedDocumentIds,
+    sessionId,
+    sourceSelectionInitialized,
+  ]);
 
   useEffect(() => {
     if (!hydrated || !activeRequest || processingRef.current) return;
@@ -122,6 +143,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       activeRequest.documentIds,
       activeRequest.sessionId,
       CHAT_PROFILE_ID,
+      activeRequest.studySessionId,
     )
       .then((response) => {
         setSessionId(response.session_id);
@@ -164,7 +186,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [activeRequest, hydrated]);
 
   const sendMessage = useCallback(
-    (prompt: string, documentIds: string[]) => {
+    (prompt: string, documentIds: string[], studySessionId?: string | null) => {
       const trimmed = prompt.trim();
       if (!trimmed || activeRequest || !documentIds.length) return;
       const userMessage: ChatMessage = {
@@ -185,6 +207,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         prompt: trimmed,
         documentIds,
         sessionId,
+        studySessionId,
       });
     },
     [activeRequest, sessionId],
@@ -192,7 +215,41 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const setSelectedDocumentIds = useCallback((documentIds: string[]) => {
     setSelectedDocumentIdsState(documentIds);
+    setSourceSelectionInitialized(true);
   }, []);
+
+  const initializeDocumentSelection = useCallback((documentIds: string[]) => {
+    setSelectedDocumentIdsState(documentIds);
+    setSourceSelectionInitialized(true);
+  }, []);
+
+  const startNewSession = useCallback(() => {
+    if (activeRequest) return;
+    setMessages([starterMessage]);
+    setSessionId(undefined);
+    setSelectedDocumentIdsState([]);
+    setSourceSelectionInitialized(true);
+  }, [activeRequest]);
+
+  const loadSession = useCallback(
+    (session: ChatSessionDetail) => {
+      if (activeRequest) return;
+      setSessionId(session.id);
+      setMessages(
+        session.messages.length
+          ? session.messages.map((message) => ({
+              id: message.id,
+              role: message.role,
+              text: message.content,
+              citations: message.citations,
+              meta: message.model_profile_id ?? undefined,
+              status: "completed" as const,
+            }))
+          : [starterMessage],
+      );
+    },
+    [activeRequest],
+  );
 
   const clearMessages = useCallback(() => {
     if (activeRequest) return;
@@ -204,20 +261,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => ({
       messages,
       selectedDocumentIds,
+      sourceSelectionInitialized,
       sessionId,
       sending,
       sendMessage,
       setSelectedDocumentIds,
+      initializeDocumentSelection,
+      startNewSession,
+      loadSession,
       clearMessages,
     }),
     [
       clearMessages,
+      initializeDocumentSelection,
+      loadSession,
       messages,
       selectedDocumentIds,
       sendMessage,
       sending,
       sessionId,
       setSelectedDocumentIds,
+      sourceSelectionInitialized,
+      startNewSession,
     ],
   );
 
@@ -233,7 +298,7 @@ function ChatStatusCard() {
   return (
     <Link
       href="/chat"
-      className="fixed bottom-24 right-5 z-50 flex max-w-[330px] items-center gap-3 rounded-2xl border border-[#d9e3dc] bg-white px-4 py-3 shadow-[0_16px_45px_rgba(21,43,31,0.18)] transition hover:-translate-y-0.5"
+      className="fixed bottom-24 left-5 right-5 z-50 flex items-center gap-3 rounded-2xl border border-[#d9e3dc] bg-white px-4 py-3 shadow-[0_16px_45px_rgba(21,43,31,0.18)] transition hover:-translate-y-0.5 sm:left-auto sm:max-w-[330px]"
     >
       <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#eef5ea] text-[#477238]">
         <LoaderCircle size={18} className="animate-spin" />

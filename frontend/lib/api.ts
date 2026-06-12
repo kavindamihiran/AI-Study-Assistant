@@ -51,6 +51,7 @@ export type DocumentRecord = {
   content_type: string | null;
   file_size: number;
   title: string;
+  study_session_id: string | null;
   status: "processing" | "indexed" | "failed";
   chunk_count: number;
   character_count: number;
@@ -74,6 +75,39 @@ export type GroundedChatResponse = {
   model_id: string | null;
   profile_id: string;
   latency_ms: number;
+};
+
+export type ChatSessionSummary = {
+  id: string;
+  title: string;
+  active_model_profile_id: string | null;
+  study_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChatSessionMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+  citations: Citation[];
+  model_profile_id: string | null;
+  created_at: string;
+};
+
+export type ChatSessionDetail = {
+  id: string;
+  title: string;
+  active_model_profile_id: string | null;
+  study_session_id: string | null;
+  messages: ChatSessionMessage[];
+};
+
+export type StudyWorkspace = {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type StudyToolKind = "summary" | "mcq" | "flashcards" | "plan";
@@ -172,16 +206,27 @@ export function testProfile(
   });
 }
 
-export async function getDocuments(): Promise<DocumentRecord[]> {
+export async function getDocuments(
+  studySessionId?: string | null,
+): Promise<DocumentRecord[]> {
+  const query = studySessionId
+    ? `?study_session_id=${encodeURIComponent(studySessionId)}`
+    : "";
   const response = await request<{ documents: DocumentRecord[] }>(
-    "/api/documents",
+    `/api/documents${query}`,
   );
   return response.documents;
 }
 
-export async function uploadDocument(file: File): Promise<DocumentRecord> {
+export async function uploadDocument(
+  file: File,
+  studySessionId?: string | null,
+): Promise<DocumentRecord> {
   const form = new FormData();
   form.append("file", file);
+  if (studySessionId) {
+    form.append("study_session_id", studySessionId);
+  }
   const response = await fetch(`${API_BASE_URL}/api/documents/upload`, {
     method: "POST",
     body: form,
@@ -215,6 +260,7 @@ export function chatWithDocuments(
   documentIds?: string[],
   sessionId?: string,
   profileId?: string,
+  studySessionId?: string | null,
 ): Promise<GroundedChatResponse> {
   return request<GroundedChatResponse>("/api/chat", {
     method: "POST",
@@ -223,7 +269,44 @@ export function chatWithDocuments(
       document_ids: documentIds?.length ? documentIds : null,
       session_id: sessionId ?? null,
       profile_id: profileId ?? null,
+      study_session_id: studySessionId ?? null,
     }),
+  });
+}
+
+export async function getChatSessions(
+  studySessionId?: string | null,
+): Promise<ChatSessionSummary[]> {
+  const query = studySessionId
+    ? `?study_session_id=${encodeURIComponent(studySessionId)}`
+    : "";
+  const response = await request<{ sessions: ChatSessionSummary[] }>(
+    `/api/chat/sessions${query}`,
+  );
+  return response.sessions;
+}
+
+export function getChatSession(sessionId: string): Promise<ChatSessionDetail> {
+  return request<ChatSessionDetail>(`/api/chat/sessions/${sessionId}`);
+}
+
+export async function getStudyWorkspaces(): Promise<StudyWorkspace[]> {
+  const response = await request<{ sessions: StudyWorkspace[] }>(
+    "/api/study-sessions",
+  );
+  return response.sessions;
+}
+
+export function createStudyWorkspace(title: string): Promise<StudyWorkspace> {
+  return request<StudyWorkspace>("/api/study-sessions", {
+    method: "POST",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteStudyWorkspace(workspaceId: string): Promise<void> {
+  return request<void>(`/api/study-sessions/${workspaceId}`, {
+    method: "DELETE",
   });
 }
 
