@@ -57,14 +57,14 @@ class HashingEmbeddingProvider:
         return self._embed(text)
 
 
-class NvidiaEmbeddingProvider:
+class HostedEmbeddingProvider:
     def __init__(
         self,
         *,
         model_id: str,
         dimension: int,
-        base_url: str = "https://integrate.api.nvidia.com/v1",
-        api_key_env_name: str = "NVIDIA_API_KEY",
+        base_url: str,
+        api_key_env_name: str = "AI_API_KEY",
         timeout_seconds: float = 90,
     ) -> None:
         self.model_id = model_id
@@ -104,15 +104,15 @@ class NvidiaEmbeddingProvider:
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise RuntimeError(
-                f"NVIDIA embeddings returned HTTP {exc.code}: {detail}"
+                f"Hosted embeddings returned HTTP {exc.code}: {detail}"
             ) from exc
         except (urllib.error.URLError, TimeoutError) as exc:
-            raise RuntimeError(f"NVIDIA embeddings request failed: {exc}") from exc
+            raise RuntimeError(f"Hosted embeddings request failed: {exc}") from exc
 
         ordered = sorted(payload.get("data", []), key=lambda item: item["index"])
         vectors = [item["embedding"] for item in ordered]
         if len(vectors) != len(texts):
-            raise RuntimeError("NVIDIA embeddings returned an unexpected result count")
+            raise RuntimeError("Hosted embeddings returned an unexpected result count")
         if vectors:
             self.dimension = len(vectors[0])
         return vectors

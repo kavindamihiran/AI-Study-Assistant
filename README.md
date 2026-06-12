@@ -1,20 +1,17 @@
-# AI Study Assistant
+# StudyOS
 
-Working Next.js and FastAPI study workspace with:
+StudyOS is an AI study workspace for turning course material into:
 
-- NVIDIA NIM model-profile registry and provider-neutral LLM Gateway
-- PDF, TXT, Markdown, and DOCX ingestion
-- SQLAlchemy persistence for documents, chunks, chat history, and model runs
-- local persisted dense-vector search with hybrid lexical reranking
-- optional PostgreSQL/Neon database configuration
-- optional Pinecone vector database
-- local hashing embeddings or NVIDIA NIM embeddings
-- grounded RAG answers with backend-generated citations
+- grounded answers with document citations
+- summaries and study plans
+- multiple-choice practice questions
+- flashcards
+- reusable subject sessions
+- saved conversations and background generation jobs
 
-## Local Quick Start
+## Local Start
 
-The default setup needs no database or vector service. It creates
-`backend/data/study_assistant.db` and stores vectors in the database.
+Backend:
 
 ```powershell
 cd backend
@@ -24,6 +21,8 @@ python -m pip install -e ".[dev]"
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+Frontend:
+
 ```powershell
 cd frontend
 npm install
@@ -32,124 +31,43 @@ npm run dev -- --hostname 127.0.0.1 --port 3200
 
 Open `http://127.0.0.1:3200`.
 
-Backend secrets live in `backend/.env.local`. The API loads `.env`,
-`.env.local`, `backend/.env`, and `backend/.env.local` automatically, with
-`.env.local` values taking precedence over `.env` files. Keep NVIDIA NIM keys
-out of `frontend/.env.local`; frontend variables are browser-facing.
+## Production Configuration
 
-## Database
+Copy `backend/.env.example` to `backend/.env.local` and set the managed AI
+connection values. Local env files are ignored by git and loaded automatically
+by the backend.
 
-SQLite is used when `DATABASE_URL` is empty. Tables are initialized
-automatically from the SQLAlchemy schema.
-
-To run local PostgreSQL:
-
-```powershell
-docker compose up -d postgres
-```
-
-Then set:
+The browser only needs:
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg://study_assistant:study_assistant@localhost:5432/study_assistant
+NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com
 ```
 
-For Neon, use its PostgreSQL connection string with the
-`postgresql+psycopg://` scheme.
+Keep all private credentials in the backend environment. Never place private
+keys in frontend variables.
 
-Persisted tables:
+## Data
 
-- `documents`
-- `document_chunks`
-- `chunk_embeddings`
-- `chat_sessions`
-- `chat_messages`
-- `model_runs`
+The default local setup stores documents, chunks, vectors, sessions, chats, and
+generation history in SQLite under `backend/data`.
 
-## Embeddings And Vector Search
-
-Zero-setup local configuration:
+For PostgreSQL:
 
 ```dotenv
-EMBEDDING_PROVIDER=local
-EMBEDDING_DIMENSION=384
-VECTOR_STORE_PROVIDER=local
+DATABASE_URL=postgresql+psycopg://user:password@host:5432/database
 ```
 
-For NVIDIA semantic embeddings:
+The application creates its tables automatically.
 
-```dotenv
-EMBEDDING_PROVIDER=nvidia
-NVIDIA_EMBEDDING_MODEL_ID=nvidia/llama-nemotron-embed-1b-v2
-EMBEDDING_DIMENSION=2048
-```
+## Health Checks
 
-For Pinecone, create a cosine index whose dimension matches the embedding
-model, install the optional client, then configure its host:
-
-```powershell
-python -m pip install -e ".[pinecone]"
-```
-
-```dotenv
-VECTOR_STORE_PROVIDER=pinecone
-PINECONE_API_KEY=...
-PINECONE_INDEX_HOST=...
-PINECONE_NAMESPACE=study-assistant
-```
-
-Pinecone stores vectors and metadata while PostgreSQL/SQLite remains the source
-of truth for document text, chunks, sessions, and model-run records.
-
-## Model Profiles
-
-Built-in NVIDIA profiles include default model IDs so a fresh backend restart
-does not leave GLM, Kimi, DeepSeek, or Nemotron with blank configuration. You
-can still override any profile from `.env`:
-
-```dotenv
-NVIDIA_DEFAULT_MODEL_ID=nvidia/nemotron-3-super-120b-a12b
-NVIDIA_DEEPSEEK_V4_FLASH_MODEL_ID=deepseek-ai/deepseek-v3.1-terminus
-NVIDIA_DEEPSEEK_V4_PRO_MODEL_ID=deepseek-ai/deepseek-v3.2
-NVIDIA_GLM_5_1_MODEL_ID=z-ai/glm-5.1
-NVIDIA_KIMI_K2_6_MODEL_ID=moonshotai/kimi-k2.6
-```
-
-## RAG Flow
-
-1. Extract text and preserve PDF page numbers.
-2. Split text into overlapping chunks.
-3. Persist document and chunk metadata in SQL.
-4. Generate and store dense embeddings.
-5. Retrieve by vector similarity and lexical overlap.
-6. Build a bounded context prompt.
-7. Generate through the active LLM Gateway profile.
-8. Return citations from retrieved chunk metadata.
-9. Persist user/assistant messages and model-run telemetry.
-
-## API
-
-- `POST /api/documents/upload`
-- `GET /api/documents`
-- `GET /api/documents/{id}`
-- `POST /api/documents/{id}/reindex`
-- `DELETE /api/documents/{id}`
-- `POST /api/chat`
-- `GET /api/chat/sessions`
-- `GET /api/chat/sessions/{id}`
-- `DELETE /api/chat/sessions/{id}`
-- `GET /api/models/profiles`
-- `GET /api/models/active`
-- `POST /api/models/switch`
-- `POST /api/models/test`
 - `GET /health`
 - `GET /ready`
 
-## Test
+## Tests
 
 ```powershell
-cd backend
-.\.venv-api\Scripts\python.exe -m pytest -q -p no:cacheprovider
+.\backend\.venv-api\Scripts\python.exe -m pytest backend\tests -q -p no:cacheprovider
 ```
 
 ```powershell

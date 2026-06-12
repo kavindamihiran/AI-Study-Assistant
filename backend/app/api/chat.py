@@ -9,13 +9,12 @@ from app.llm.models import ChatMessage
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-CHAT_PROFILE_ID = "nvidia_nemotron_default"
+CHAT_PROFILE_ID = "study_ai_default"
 
 
 class ChatRequest(BaseModel):
     query: str = Field(min_length=1, max_length=5000)
     document_ids: list[str] | None = None
-    profile_id: str | None = None
     session_id: str | None = None
     study_session_id: str | None = None
 
@@ -24,7 +23,7 @@ class ChatRequest(BaseModel):
 async def chat(payload: ChatRequest, request: Request) -> dict:
     store: DocumentStore = request.app.state.document_store
     gateway: LLMGateway = request.app.state.llm_gateway
-    profile_id = payload.profile_id or CHAT_PROFILE_ID
+    profile_id = CHAT_PROFILE_ID
     session_id = store.ensure_chat_session(
         session_id=payload.session_id,
         query=payload.query,
@@ -55,8 +54,6 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
             "session_id": session_id,
             "answer_text": answer,
             "citations": [],
-            "model_id": None,
-            "profile_id": profile_id,
             "latency_ms": 0,
         }
 
@@ -99,7 +96,10 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         retry_count=result.retry_count,
     )
     if not result.ok:
-        raise HTTPException(status_code=502, detail=result.public_dict())
+        raise HTTPException(
+            status_code=502,
+            detail="The AI assistant is temporarily unavailable. Please try again.",
+        )
 
     citations = [
         {
@@ -123,8 +123,6 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         "session_id": session_id,
         "answer_text": result.text,
         "citations": citations,
-        "model_id": result.model_id,
-        "profile_id": result.profile_id,
         "latency_ms": result.latency_ms,
     }
 

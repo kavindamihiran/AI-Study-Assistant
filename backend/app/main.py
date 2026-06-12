@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
-from app.api.models import router as models_router
 from app.api.study import router as study_router
 from app.api.study_sessions import router as study_sessions_router
 from app.config import Settings
@@ -14,7 +15,7 @@ from app.documents.store import DocumentStore
 from app.llm.gateway import LLMGateway
 from app.llm.registry import ModelProfileRegistry
 from app.llm.transport import OpenAICompatibleTransport
-from app.rag.embeddings import HashingEmbeddingProvider, NvidiaEmbeddingProvider
+from app.rag.embeddings import HashingEmbeddingProvider, HostedEmbeddingProvider
 from app.rag.vector_store import LocalSQLVectorStore, PineconeVectorStore
 
 
@@ -35,11 +36,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     database = Database(database_url)
     database.initialize()
 
-    if settings.embedding_provider == "nvidia":
-        embedder = NvidiaEmbeddingProvider(
-            model_id=settings.nvidia_embedding_model_id,
+    if settings.embedding_provider == "hosted":
+        embedder = HostedEmbeddingProvider(
+            model_id=settings.hosted_embedding_model_id,
             dimension=settings.embedding_dimension,
-            base_url="https://integrate.api.nvidia.com/v1",
+            base_url=os.getenv("AI_BASE_URL", ""),
             timeout_seconds=settings.llm_request_timeout_seconds,
         )
     else:
@@ -85,7 +86,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
-    app.include_router(models_router)
     app.include_router(documents_router)
     app.include_router(chat_router)
     app.include_router(study_router)
@@ -98,17 +98,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/ready", tags=["health"])
     async def ready() -> dict:
         profile = registry.get(gateway.active_profile_id)
+        data_ready = database.health() and document_store.vector_store.health()
+        ai_ready = profile.is_configured
         return {
-            "status": (
-                "ready"
-                if profile.is_configured
-                and database.health()
-                and document_store.vector_store.health()
-                else "configuration_required"
-            ),
-            "active_profile_id": profile.profile_id,
-            "model_configured": profile.is_configured,
-            **document_store.status,
+            "status": "ready" if ai_ready and data_ready else "setup_required",
+            "ai_ready": ai_ready,
+            "data_ready": data_ready,
+            "database": "connected" if database.health() else "unavailable",
         }
 
     return app

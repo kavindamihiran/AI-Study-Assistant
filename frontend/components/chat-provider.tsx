@@ -50,7 +50,6 @@ type ChatContextValue = {
 };
 
 const STORAGE_KEY = "studyos.chat.v1";
-const CHAT_PROFILE_ID = "nvidia_nemotron_default";
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 const starterMessage: ChatMessage = {
@@ -142,7 +141,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       activeRequest.prompt,
       activeRequest.documentIds,
       activeRequest.sessionId,
-      CHAT_PROFILE_ID,
       activeRequest.studySessionId,
     )
       .then((response) => {
@@ -153,9 +151,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               ? {
                   ...message,
                   text: response.answer_text,
-                  meta: response.model_id
-                    ? `${response.model_id} · ${(response.latency_ms / 1000).toFixed(1)}s`
-                    : "No matching note chunks",
+                  meta: `${(response.latency_ms / 1000).toFixed(1)}s`,
                   citations: response.citations,
                   status: "completed",
                 }
@@ -242,7 +238,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               role: message.role,
               text: message.content,
               citations: message.citations,
-              meta: message.model_profile_id ?? undefined,
+              meta: undefined,
               status: "completed" as const,
             }))
           : [starterMessage],

@@ -1,13 +1,12 @@
 "use client";
 
 import {
-  Activity,
   ArrowRight,
   BookOpen,
   FileText,
   Library,
   MessageSquareText,
-  ShieldCheck,
+  NotebookTabs,
   Sparkles,
   WandSparkles,
 } from "lucide-react";
@@ -16,10 +15,9 @@ import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import {
   DocumentRecord,
-  ModelProfile,
-  getActiveProfile,
   getDocuments,
-  getProfiles,
+  StudyWorkspace,
+  getStudyWorkspaces,
 } from "@/lib/api";
 
 const quickActions = [
@@ -48,20 +46,17 @@ const quickActions = [
 
 export default function OverviewPage() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
-  const [activeProfile, setActiveProfile] = useState<ModelProfile | null>(null);
+  const [sessions, setSessions] = useState<StudyWorkspace[]>([]);
 
   useEffect(() => {
-    void Promise.all([getDocuments(), getProfiles(), getActiveProfile()])
-      .then(([indexedDocuments, modelProfiles, active]) => {
+    void Promise.all([getDocuments(), getStudyWorkspaces()])
+      .then(([indexedDocuments, studySessions]) => {
         setDocuments(indexedDocuments);
-        setProfiles(modelProfiles);
-        setActiveProfile(active);
+        setSessions(studySessions);
       })
       .catch(() => {
         setDocuments([]);
-        setProfiles([]);
-        setActiveProfile(null);
+        setSessions([]);
       });
   }, []);
 
@@ -99,16 +94,16 @@ export default function OverviewPage() {
             icon: BookOpen,
           },
           {
-            label: "Model profiles",
-            value: String(profiles.length),
-            note: "Switch through one gateway",
-            icon: Sparkles,
+            label: "Study sessions",
+            value: String(sessions.length),
+            note: sessions.length ? "Subjects kept separate" : "Create a subject session",
+            icon: NotebookTabs,
           },
           {
-            label: "Active model",
-            value: activeProfile?.display_name ?? "Loading",
-            note: activeProfile?.model_id ?? "Checking gateway",
-            icon: ShieldCheck,
+            label: "AI assistant",
+            value: "Ready",
+            note: "Answers, summaries, and practice tools",
+            icon: Sparkles,
           },
         ].map((item) => (
             <div
@@ -160,17 +155,18 @@ export default function OverviewPage() {
 
         <section className="rounded-3xl bg-[#173a29] p-6 text-white">
           <div className="grid size-11 place-items-center rounded-2xl bg-[#c8f169] text-[#17321f]">
-            <Activity size={20} />
+            <Sparkles size={20} />
           </div>
-          <h2 className="mt-5 text-xl font-semibold">Model gateway ready</h2>
+          <h2 className="mt-5 text-xl font-semibold">Study help is ready</h2>
           <p className="mt-2 text-sm leading-6 text-white/60">
-            DeepSeek, GLM, Kimi, and Nemotron share one normalized response contract.
+            Upload your material once, then turn it into answers, summaries,
+            flashcards, practice questions, and study plans.
           </p>
           <Link
-            href="/gateway"
+            href="/study-tools"
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-3 text-xs font-semibold hover:bg-white/15"
           >
-            Open gateway
+            Open study tools
             <ArrowRight size={15} />
           </Link>
         </section>

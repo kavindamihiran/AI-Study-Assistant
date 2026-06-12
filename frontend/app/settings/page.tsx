@@ -1,36 +1,31 @@
 "use client";
 
-import { Check, Database, KeyRound, Save, Server, SlidersHorizontal } from "lucide-react";
+import { Check, Database, FileText, LockKeyhole, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
-import {
-  ModelProfile,
-  SystemStatus,
-  getActiveProfile,
-  getProfiles,
-  getSystemStatus,
-  switchProfile,
-} from "@/lib/api";
+import { useStudyWorkspace } from "@/components/study-workspace-provider";
+import { DocumentRecord, SystemStatus, getDocuments, getSystemStatus } from "@/lib/api";
 
 export default function SettingsPage() {
-  const [profiles, setProfiles] = useState<ModelProfile[]>([]);
-  const [activeId, setActiveId] = useState("");
   const [saved, setSaved] = useState(false);
   const [system, setSystem] = useState<SystemStatus | null>(null);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const { activeWorkspace } = useStudyWorkspace();
 
   useEffect(() => {
-    void Promise.all([getProfiles(), getActiveProfile(), getSystemStatus()]).then(
-      ([items, active, systemStatus]) => {
-        setProfiles(items);
-        setActiveId(active.profile_id);
-        setSystem(systemStatus);
-      },
-    );
+    void getSystemStatus()
+      .then(setSystem)
+      .catch(() => setSystem(null));
   }, []);
 
-  async function save() {
-    if (!activeId) return;
-    await switchProfile(activeId);
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    void getDocuments(activeWorkspace.id)
+      .then(setDocuments)
+      .catch(() => setDocuments([]));
+  }, [activeWorkspace?.id]);
+
+  function save() {
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
   }
@@ -40,77 +35,60 @@ export default function SettingsPage() {
       <PageHeading
         section="Settings"
         title="Workspace settings"
-        description="Choose the default model and review how your local study workspace is connected."
+        description="Review your current study session and production workspace status."
       />
       <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_340px]">
         <section className="rounded-3xl border border-[#dfe5e1] bg-white p-6">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-xl bg-[#edf5e6] text-[#56843f]">
-              <SlidersHorizontal size={18} />
+              <LockKeyhole size={18} />
             </div>
             <div>
-              <h2 className="text-base font-semibold">Default model profile</h2>
-              <p className="mt-1 text-xs text-[#7c8982]">Used for new chats and study tools</p>
+              <h2 className="text-base font-semibold">Student workspace</h2>
+              <p className="mt-1 text-xs text-[#7c8982]">
+                Simple controls for the active subject session.
+              </p>
             </div>
           </div>
-          <div className="mt-6 space-y-3">
-            {profiles.map((profile) => (
-              <label
-                key={profile.profile_id}
-                className={`flex cursor-pointer items-center gap-4 rounded-2xl border p-4 ${
-                  activeId === profile.profile_id
-                    ? "border-[#82a874] bg-[#f4faef]"
-                    : "border-[#e2e7e4]"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="active-profile"
-                  value={profile.profile_id}
-                  checked={activeId === profile.profile_id}
-                  onChange={() => setActiveId(profile.profile_id)}
-                  className="sr-only"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{profile.display_name}</p>
-                  <p className="mt-1 truncate font-mono text-[10px] text-[#89948e]">
-                    {profile.model_id}
-                  </p>
-                </div>
-                {activeId === profile.profile_id && (
-                  <div className="grid size-6 place-items-center rounded-full bg-[#709b61] text-white">
-                    <Check size={13} />
-                  </div>
-                )}
-              </label>
-            ))}
+
+          <div className="mt-6 rounded-2xl border border-[#e2e7e4] bg-[#f8faf8] p-5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7c8982]">
+              Active session
+            </p>
+            <h3 className="mt-2 text-lg font-semibold">
+              {activeWorkspace?.title ?? "Loading session..."}
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-[#65736c]">
+              Uploads, saved chats, and generated study material are scoped to
+              this session.
+            </p>
           </div>
+
           <button
-            onClick={() => void save()}
+            onClick={save}
             className="mt-6 flex items-center gap-2 rounded-xl bg-[#173a29] px-5 py-3 text-sm font-semibold text-white"
           >
             {saved ? <Check size={16} /> : <Save size={16} />}
             {saved ? "Saved" : "Save settings"}
           </button>
         </section>
+
         <aside className="space-y-4">
           {[
             {
-              icon: Server,
-              title: "FastAPI backend",
-              text: system?.status === "ready" ? "Connected and ready" : "Checking status",
+              icon: Check,
+              title: "AI features",
+              text: system?.status === "ready" ? "Ready" : "Checking status",
             },
             {
               icon: Database,
-              title: `Database · ${system?.database_backend ?? "loading"}`,
-              text: system?.database ?? "Checking database",
+              title: "Study data",
+              text: system?.database === "connected" ? "Connected" : "Checking data store",
             },
             {
-              icon: KeyRound,
-              title: `Vectors · ${system?.vector_store ?? "loading"}`,
-              text: system
-                ? `${system.embedding_model} · ${system.embedding_dimension} dimensions`
-                : "Checking vector store",
+              icon: FileText,
+              title: "Session documents",
+              text: `${documents.length} document${documents.length === 1 ? "" : "s"} in this session`,
             },
           ].map((item) => (
             <div

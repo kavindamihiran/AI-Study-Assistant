@@ -28,6 +28,15 @@ def _gateway(request: Request) -> LLMGateway:
     return request.app.state.llm_gateway
 
 
+def _resolve_public_or_internal_profile_id(
+    gateway: LLMGateway, requested_id: str
+) -> str:
+    for profile in gateway.registry.list_profiles():
+        if profile.public_dict()["profile_id"] == requested_id:
+            return profile.profile_id
+    return requested_id
+
+
 @router.get("/profiles")
 async def list_model_profiles(request: Request) -> dict:
     gateway = _gateway(request)
@@ -51,7 +60,9 @@ async def switch_active_model(
 ) -> dict:
     gateway = _gateway(request)
     try:
-        profile = gateway.resolve_profile(payload.profile_id)
+        profile = gateway.resolve_profile(
+            _resolve_public_or_internal_profile_id(gateway, payload.profile_id)
+        )
     except LLMGatewayError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     gateway.active_profile_id = profile.profile_id
@@ -61,13 +72,17 @@ async def switch_active_model(
 @router.post("/test")
 async def test_model(payload: ModelTestRequest, request: Request) -> dict:
     gateway = _gateway(request)
+    profile_id = (
+        _resolve_public_or_internal_profile_id(gateway, payload.profile_id)
+        if payload.profile_id
+        else None
+    )
     response = await gateway.generate_text(
         [ChatMessage("user", payload.prompt)],
-        profile_id=payload.profile_id,
+        profile_id=profile_id,
         max_tokens=128,
         use_fallback=False,
     )
     if not response.ok:
         raise HTTPException(status_code=502, detail=response.public_dict())
     return response.public_dict()
-

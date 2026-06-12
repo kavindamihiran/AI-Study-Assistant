@@ -744,7 +744,7 @@ class DocumentStore:
             {
                 "id": item.id,
                 "title": item.title,
-                "active_model_profile_id": item.active_model_profile_id,
+                "active_model_profile_id": None,
                 "study_session_id": item.study_session_id,
                 "created_at": item.created_at.isoformat(),
                 "updated_at": item.updated_at.isoformat(),
@@ -767,7 +767,7 @@ class DocumentStore:
             return {
                 "id": chat_session.id,
                 "title": chat_session.title,
-                "active_model_profile_id": chat_session.active_model_profile_id,
+                "active_model_profile_id": None,
                 "study_session_id": chat_session.study_session_id,
                 "messages": [
                     {
@@ -779,7 +779,7 @@ class DocumentStore:
                             if message.citations_json
                             else []
                         ),
-                        "model_profile_id": message.model_profile_id,
+                        "model_profile_id": None,
                         "created_at": message.created_at.isoformat(),
                     }
                     for message in messages

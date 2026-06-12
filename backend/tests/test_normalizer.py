@@ -51,7 +51,7 @@ class ResponseNormalizerTests(unittest.TestCase):
             },
         }
 
-        result = normalize_response(raw, profile_id="deepseek")
+        result = normalize_response(raw, profile_id="advanced")
 
         self.assertEqual(result.text, "Final answer")
         self.assertEqual(result.reasoning_text_internal_only, "separate reasoning")
@@ -61,7 +61,7 @@ class ResponseNormalizerTests(unittest.TestCase):
         self.assertNotIn("reasoning_text_internal_only", result.public_dict())
 
     def test_normalizes_langchain_style_content_blocks(self) -> None:
-        result = normalize_response(FakeAIMessage(), profile_id="kimi")
+        result = normalize_response(FakeAIMessage(), profile_id="long_context")
 
         self.assertEqual(result.text, "Visible answer")
         self.assertEqual(result.reasoning_text_internal_only, "private chain")
