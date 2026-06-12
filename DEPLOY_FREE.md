@@ -76,22 +76,20 @@ required tables during its first startup.
 
 5. Apply the Blueprint and wait for both services to finish deploying.
 
-The expected public addresses are:
+Render assigns public addresses to both services. Copy those URLs from the
+Render dashboard after deployment.
 
-- Frontend: <https://studyos-kavinda-web-2026.onrender.com>
-- API: <https://studyos-kavinda-api-2026.onrender.com>
-
-If Render reports that either service name is unavailable, change both service
-names in `render.yaml` and also update the matching `FRONTEND_URL` and
-`NEXT_PUBLIC_API_BASE_URL` values before applying the Blueprint again.
+If Render reports that either service name is unavailable, change that service
+name in `render.yaml` and update the matching `name` in the other service's
+`fromService` reference.
 
 ## 4. Verify The Deployment
 
 Open these URLs in order:
 
-1. `https://studyos-kavinda-api-2026.onrender.com/health`
-2. `https://studyos-kavinda-api-2026.onrender.com/ready`
-3. `https://studyos-kavinda-web-2026.onrender.com`
+1. `<API_URL>/health`
+2. `<API_URL>/ready`
+3. `<FRONTEND_URL>`
 
 `/health` should return `{"status":"ok"}`. `/ready` should report that AI and
 data are ready. Then create a subject session, upload a small PDF, ask a

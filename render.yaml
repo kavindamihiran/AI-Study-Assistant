@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: studyos-kavinda-api-2026
+    name: studyos-api
     runtime: python
     plan: free
     region: singapore
@@ -21,7 +21,10 @@ services:
       - key: ACTIVE_MODEL_PROFILE_ID
         value: study_ai_default
       - key: FRONTEND_URL
-        value: https://studyos-kavinda-web-2026.onrender.com
+        fromService:
+          type: web
+          name: studyos-web
+          property: host
       - key: DATA_DIR
         value: /tmp/studyos
       - key: MAX_UPLOAD_MB
@@ -36,7 +39,7 @@ services:
         value: "90"
 
   - type: web
-    name: studyos-kavinda-web-2026
+    name: studyos-web
     runtime: static
     rootDir: frontend
     buildCommand: npm ci && npm run build
@@ -44,7 +47,10 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: NEXT_PUBLIC_API_BASE_URL
-        value: https://studyos-kavinda-api-2026.onrender.com
+        fromService:
+          type: web
+          name: studyos-api
+          property: host
     headers:
       - path: /*
         name: X-Content-Type-Options
