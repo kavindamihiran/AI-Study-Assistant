@@ -15,10 +15,9 @@ reliability-grade production setup. Render explicitly recommends its free
 instances for hobby projects and testing rather than production applications.
 The API sleeps when idle and neither free service provides an uptime SLA.
 
-The current application also has no login system or per-user data isolation.
-Anyone who can reach the public URL can use the workspace and may be able to
-view or delete its content. Do not upload private material or advertise the URL
-to untrusted users until authentication and authorization are implemented.
+The current application includes account login and per-user data isolation. For
+public use, keep registration enabled so each visitor must create an account
+before using the workspace.
 
 ## Important Before Production
 
@@ -110,6 +109,9 @@ URL needs to be committed to the repository.
 | `AI_API_KEY` | The newly rotated private API key |
 | `AI_BASE_URL` | The private server-side compatible API base URL |
 | `AI_DEFAULT_MODEL_ID` | The production model identifier |
+| `AUTH_COOKIE_SECURE` | `true` |
+| `AUTH_COOKIE_SAMESITE` | `none` |
+| `AUTH_REGISTRATION_ENABLED` | `true` for public signup |
 
 5. Apply the Blueprint and wait for both services to finish deploying.
 
@@ -147,8 +149,13 @@ Open these URLs in order:
 3. `<FRONTEND_URL>`
 
 `/health` should return `{"status":"ok"}`. `/ready` should report that AI and
-data are ready. Then create a subject session, upload a small PDF, ask a
-question, refresh the page, and confirm the session and conversation remain.
+data are ready. Then register/sign in, create a subject session, upload a small
+PDF, ask a question, refresh the page, and confirm the session and conversation
+remain.
+
+For a public deployment, keep backend `AUTH_REGISTRATION_ENABLED=true`. For a
+private deployment, set it to `false` after creating your own account and
+redeploy the backend.
 
 If the frontend opens but API requests fail:
 
@@ -183,3 +190,28 @@ added later:
 Keep `AI_API_KEY`, database credentials, and all provider configuration on the
 backend service only. Never create a `NEXT_PUBLIC_` variable containing a
 private credential.
+
+## Authentication Settings
+
+Use these backend settings for a public Render deployment because the frontend
+and API are served from HTTPS public origins:
+
+```dotenv
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAMESITE=none
+AUTH_REGISTRATION_ENABLED=true
+```
+
+With this setting, visitors can register, but they must sign in before using
+documents, chat, study sessions, or study tools. Their data is scoped to their
+own account.
+
+For local development over HTTP, use:
+
+```dotenv
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
+```
+
+If registration is disabled before any account exists, no one can sign in until
+registration is enabled again or a user is inserted directly into the database.

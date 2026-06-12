@@ -1,5 +1,6 @@
 from .core import Database
 from .models import (
+    AuthSessionModel,
     Base,
     ChatMessageModel,
     ChatSessionModel,
@@ -8,9 +9,11 @@ from .models import (
     DocumentModel,
     ModelRunModel,
     StudySessionModel,
+    UserModel,
 )
 
 __all__ = [
+    "AuthSessionModel",
     "Base",
     "ChatMessageModel",
     "ChatSessionModel",
@@ -20,4 +23,5 @@ __all__ = [
     "DocumentModel",
     "ModelRunModel",
     "StudySessionModel",
+    "UserModel",
 ]

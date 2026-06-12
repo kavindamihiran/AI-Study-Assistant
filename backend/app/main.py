@@ -5,11 +5,13 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.study import router as study_router
 from app.api.study_sessions import router as study_sessions_router
 from app.config import Settings
+from app.auth import AuthService
 from app.database import Database
 from app.documents.store import DocumentStore
 from app.llm.gateway import LLMGateway
@@ -21,6 +23,14 @@ from app.rag.vector_store import LocalSQLVectorStore, PineconeVectorStore
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
+    if settings.auth_cookie_samesite not in {"lax", "strict", "none"}:
+        raise RuntimeError(
+            "AUTH_COOKIE_SAMESITE must be lax, strict, or none"
+        )
+    if settings.auth_cookie_samesite == "none" and not settings.auth_cookie_secure:
+        raise RuntimeError(
+            "AUTH_COOKIE_SECURE must be true when AUTH_COOKIE_SAMESITE=none"
+        )
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     registry = ModelProfileRegistry.from_json_file(settings.model_profiles_path)
     gateway = LLMGateway(
@@ -35,6 +45,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     database = Database(database_url)
     database.initialize()
+    auth_service = AuthService(
+        database, session_days=settings.auth_session_days
+    )
 
     if settings.embedding_provider == "hosted":
         embedder = HostedEmbeddingProvider(
@@ -69,6 +82,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="AI Study Assistant API", version="0.1.0")
     app.state.llm_gateway = gateway
+    app.state.settings = settings
+    app.state.auth_service = auth_service
     app.state.database = database
     app.state.document_store = document_store
     app.state.max_upload_bytes = settings.max_upload_mb * 1024 * 1024
@@ -88,8 +103,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=sorted(allowed_origins),
         allow_credentials=True,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
+        allow_headers=["Content-Type", "X-CSRF-Token"],
     )
+    app.include_router(auth_router)
     app.include_router(documents_router)
     app.include_router(chat_router)
     app.include_router(study_router)

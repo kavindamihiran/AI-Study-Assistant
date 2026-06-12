@@ -10,6 +10,7 @@ import {
   Library,
   Menu,
   MessageSquareText,
+  LogOut,
   Plus,
   Search,
   Settings2,
@@ -22,6 +23,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useChatWorkspace } from "@/components/chat-provider";
+import { useAuth } from "@/components/auth-provider";
 import { useStudyJobs } from "@/components/study-job-provider";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
@@ -86,6 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [searchSessions, setSearchSessions] = useState<ChatSessionSummary[]>([]);
   const [shellError, setShellError] = useState("");
   const router = useRouter();
+  const { user, logout } = useAuth();
   const { loadSession, startNewSession } = useChatWorkspace();
   const { clearJobs } = useStudyJobs();
   const {
@@ -211,6 +214,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     loadSession(saved);
     goTo("/chat");
   }
+
+  const initials = user.display_name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 
   return (
     <main className="min-h-screen bg-[#f5f7f6] text-[#18251f]">
@@ -382,10 +392,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-label="Open profile menu"
             >
               <div className="grid size-9 place-items-center rounded-full bg-[#dce8ff] text-xs font-bold text-[#315baa]">
-                KS
+                {initials}
               </div>
               <div className="hidden sm:block">
-                <p className="text-xs font-semibold">Kavinda</p>
+                <p className="max-w-32 truncate text-xs font-semibold">
+                  {user.display_name}
+                </p>
                 <p className="text-[10px] text-[#849089]">Student workspace</p>
               </div>
               <ChevronDown size={14} className="text-[#7d8982]" />
@@ -394,11 +406,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <div className="absolute right-0 top-12 z-50 w-[290px] rounded-3xl border border-[#dfe5e1] bg-white p-4 shadow-[0_24px_70px_rgba(21,43,31,0.18)]">
                 <div className="flex items-center gap-3">
                   <div className="grid size-11 place-items-center rounded-full bg-[#dce8ff] text-sm font-bold text-[#315baa]">
-                    KS
+                    {initials}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold">Kavinda</p>
-                    <p className="text-xs text-[#7c8982]">Student workspace</p>
+                    <p className="text-sm font-semibold">{user.display_name}</p>
+                    <p className="text-xs text-[#7c8982]">{user.email}</p>
                   </div>
                 </div>
                 <div className="mt-4 rounded-2xl bg-[#f7f9f7] p-3 text-xs leading-5 text-[#65736c]">
@@ -430,6 +442,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                     Settings
                   </button>
                 </div>
+                <button
+                  onClick={() => void logout()}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-red-100 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  <LogOut size={14} />
+                  Sign out
+                </button>
               </div>
             )}
           </div>

@@ -37,6 +37,12 @@ services:
         value: "384"
       - key: LLM_REQUEST_TIMEOUT_SECONDS
         value: "90"
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
+      - key: AUTH_COOKIE_SAMESITE
+        value: none
+      - key: AUTH_REGISTRATION_ENABLED
+        value: "true"
 
   - type: web
     name: studyos-web

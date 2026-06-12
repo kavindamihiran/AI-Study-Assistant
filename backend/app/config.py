@@ -15,6 +15,8 @@ DEFAULT_VECTOR_STORE_PROVIDER = "local"
 DEFAULT_EMBEDDING_PROVIDER = "local"
 DEFAULT_EMBEDDING_DIMENSION = 384
 DEFAULT_HOSTED_EMBEDDING_MODEL_ID = ""
+DEFAULT_AUTH_SESSION_DAYS = 7
+DEFAULT_AUTH_COOKIE_NAME = "studyos_session"
 
 
 def _parse_env_line(line: str) -> tuple[str, str] | None:
@@ -27,6 +29,13 @@ def _parse_env_line(line: str) -> tuple[str, str] | None:
     if not key:
         return None
     return key, value
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_local_env_files() -> None:
@@ -67,6 +76,11 @@ class Settings:
     pinecone_api_key: str | None = None
     pinecone_index_host: str | None = None
     pinecone_namespace: str = "study-assistant"
+    auth_session_days: int = DEFAULT_AUTH_SESSION_DAYS
+    auth_cookie_name: str = DEFAULT_AUTH_COOKIE_NAME
+    auth_cookie_secure: bool = False
+    auth_cookie_samesite: str = "lax"
+    auth_registration_enabled: bool = True
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -112,5 +126,18 @@ class Settings:
             pinecone_index_host=os.getenv("PINECONE_INDEX_HOST"),
             pinecone_namespace=os.getenv(
                 "PINECONE_NAMESPACE", "study-assistant"
+            ),
+            auth_session_days=int(
+                os.getenv("AUTH_SESSION_DAYS", str(DEFAULT_AUTH_SESSION_DAYS))
+            ),
+            auth_cookie_name=os.getenv(
+                "AUTH_COOKIE_NAME", DEFAULT_AUTH_COOKIE_NAME
+            ),
+            auth_cookie_secure=_env_bool("AUTH_COOKIE_SECURE", False),
+            auth_cookie_samesite=os.getenv(
+                "AUTH_COOKIE_SAMESITE", "lax"
+            ).lower(),
+            auth_registration_enabled=_env_bool(
+                "AUTH_REGISTRATION_ENABLED", True
             ),
         )

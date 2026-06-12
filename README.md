@@ -11,6 +11,7 @@ sessions.
 | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | Backend | FastAPI, Python 3.12+, Pydantic |
+| Authentication | Password hashing, HttpOnly cookies, CSRF protection |
 | Database | SQLAlchemy 2 with SQLite locally and PostgreSQL in production |
 | Production DB | Neon PostgreSQL, replaceable with any standard PostgreSQL service |
 | RAG | Custom retrieval-augmented generation pipeline |
@@ -35,6 +36,8 @@ keeps model behavior explicit, lightweight, and independently testable.
 - Generate summaries, MCQs, flashcards, and study plans.
 - Validate structured MCQ and flashcard output with Pydantic.
 - Create independent study sessions for different subjects.
+- Register and sign in before using the workspace.
+- Keep each user's study sessions, uploads, chats, and generated work isolated.
 - Save and restore chat conversations.
 - Queue study-tool generation while navigating between pages.
 - Search pages, documents, and saved conversations.
@@ -42,6 +45,7 @@ keeps model behavior explicit, lightweight, and independently testable.
 - Delete a study session together with its documents and chats.
 - Store model latency, token usage, retries, and run status.
 - Keep provider credentials and model identifiers server-side.
+- Enforce user ownership on sessions, documents, chats, and generated work.
 
 ## Architecture
 
@@ -134,6 +138,22 @@ Profiles are configured in
 `backend/app/llm/profiles.json`, while real credentials and model IDs remain in
 environment variables.
 
+## Security Model
+
+StudyOS uses account-scoped data access:
+
+- passwords are hashed server-side with `scrypt`
+- sessions use random opaque tokens stored as `HttpOnly` cookies
+- only a SHA-256 hash of each session token is stored in the database
+- unsafe requests require a per-session `X-CSRF-Token`
+- every study session, document, chat, and model run is filtered by user ID
+- public registration is rate-limited to reduce signup abuse
+- logout and expired sessions clear browser-persisted chat and job state
+
+For a public deployment, keep `AUTH_REGISTRATION_ENABLED=true` so new users can
+create accounts. For a private personal deployment, set it to `false` after the
+first account is created.
+
 ## Persistence
 
 SQLAlchemy stores:
@@ -198,6 +218,8 @@ AI_BASE_URL=https://your-compatible-endpoint/v1
 AI_DEFAULT_MODEL_ID=your-model-id
 ACTIVE_MODEL_PROFILE_ID=study_ai_default
 FRONTEND_URL=http://127.0.0.1:3200
+AUTH_COOKIE_SECURE=false
+AUTH_COOKIE_SAMESITE=lax
 ```
 
 Without `DATABASE_URL`, the application uses
@@ -245,7 +267,7 @@ npm run build
 Current verified status:
 
 ```text
-Backend: 21 tests passed
+Backend: 23 tests passed
 Frontend: production static build passed
 ```
 
@@ -290,13 +312,16 @@ See [DEPLOY_FREE.md](DEPLOY_FREE.md) for the complete deployment process.
 - Local environment files are ignored by Git.
 - Public APIs hide provider and model identifiers.
 - Hidden model reasoning is removed from user-facing output.
+- User data is isolated by account at the API and database-query layers.
+- Session cookies are `HttpOnly`; mutation requests require CSRF tokens.
 - Upload types and sizes are validated.
 - Generated structured data is schema-validated.
 - CORS is restricted to configured frontend origins.
 
 ## Current Limitations
 
-- Authentication and per-user authorization are not implemented yet.
+- Authentication is implemented, but advanced features such as password reset,
+  email verification, MFA, and external identity providers are not included yet.
 - Scanned PDFs require OCR, which is not currently included.
 - Original uploads need object storage for durable production retention.
 - Study-tool jobs and results are currently browser-local.
