@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: study_assistant
+      POSTGRES_USER: study_assistant
+      POSTGRES_PASSWORD: study_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - study_assistant_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U study_assistant -d study_assistant"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  study_assistant_postgres:
+

@@ -3,6 +3,7 @@
 import { Check, Clock3, Play, ShieldCheck, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import { MarkdownText } from "@/components/markdown-text";
 import {
   GatewayResponse,
   ModelProfile,
@@ -166,7 +167,11 @@ export default function GatewayPage() {
           </button>
           {(result || error) && (
             <div className={`mt-5 rounded-2xl border p-4 ${error ? "border-red-200 bg-red-50 text-red-800" : "border-[#dce9d6] bg-[#f5faf2]"}`}>
-              <p className="whitespace-pre-wrap text-sm leading-6">{error || result?.text}</p>
+              {error ? (
+                <p className="whitespace-pre-wrap text-sm leading-6">{error}</p>
+              ) : (
+                <MarkdownText text={result?.text ?? ""} />
+              )}
               {result && (
                 <div className="mt-4 flex items-center gap-2 border-t border-[#dce6d7] pt-3 text-[10px] text-[#7f8c85]">
                   <Clock3 size={13} />
@@ -180,4 +185,3 @@ export default function GatewayPage() {
     </AppShell>
   );
 }
-

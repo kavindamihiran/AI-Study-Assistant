@@ -27,6 +27,23 @@ class ModelProfileRegistryTests(unittest.TestCase):
         self.assertEqual(profile.base_url, "https://default.test/v1")
         self.assertEqual(profile.model_id, "vendor/model")
 
+    def test_uses_default_model_id_when_env_is_missing(self) -> None:
+        payload = [
+            {
+                "profile_id": "nim",
+                "display_name": "NIM",
+                "provider_name": "nvidia_nim",
+                "base_url": "${NVIDIA_BASE_URL:-https://default.test/v1}",
+                "model_id": "${NVIDIA_MODEL_ID:-vendor/default-model}",
+                "api_key_env_name": "NVIDIA_API_KEY",
+                "max_context_tokens": 32000,
+            }
+        ]
+        registry = ModelProfileRegistry.from_data(payload, env={})
+
+        profile = registry.get("nim")
+        self.assertEqual(profile.model_id, "vendor/default-model")
+
     def test_rejects_missing_fallback(self) -> None:
         payload = [
             {
