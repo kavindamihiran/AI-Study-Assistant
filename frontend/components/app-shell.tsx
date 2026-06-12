@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   ChevronDown,
   CircleHelp,
   FileText,
@@ -28,8 +27,6 @@ import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   ChatSessionSummary,
   DocumentRecord,
-  ModelProfile,
-  getActiveProfile,
   getChatSession,
   getChatSessions,
   getDocuments,
@@ -43,7 +40,6 @@ const workspaceItems = [
 ];
 
 const manageItems = [
-  { label: "Model gateway", href: "/gateway", icon: Activity },
   { label: "Settings", href: "/settings", icon: Settings2 },
 ];
 
@@ -88,7 +84,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchDocuments, setSearchDocuments] = useState<DocumentRecord[]>([]);
   const [searchSessions, setSearchSessions] = useState<ChatSessionSummary[]>([]);
-  const [activeProfile, setActiveProfile] = useState<ModelProfile | null>(null);
   const [shellError, setShellError] = useState("");
   const router = useRouter();
   const { loadSession, startNewSession } = useChatWorkspace();
@@ -139,12 +134,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     void Promise.all([
       getDocuments(activeWorkspace.id),
       getChatSessions(activeWorkspace.id),
-      getActiveProfile(),
     ])
-      .then(([documents, chatSessions, profile]) => {
+      .then(([documents, chatSessions]) => {
         setSearchDocuments(documents);
         setSearchSessions(chatSessions);
-        setActiveProfile(profile);
         setShellError("");
       })
       .catch((error) => {
@@ -344,10 +337,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mt-4 shrink-0 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
           <div className="flex items-center gap-2 text-xs font-medium">
             <ShieldCheck size={15} className="text-[#c8f169]" />
-            Gateway protected
+            Private workspace
           </div>
           <p className="mt-2 text-[11px] leading-5 text-white/45">
-            Provider secrets stay server-side. Hidden reasoning is never exposed.
+            Your study material stays organized by subject session.
           </p>
         </div>
       </aside>
@@ -412,10 +405,6 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <p>
                     <span className="font-semibold text-[#263b30]">Session:</span>{" "}
                     {activeWorkspace?.title ?? "Loading..."}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#263b30]">Model:</span>{" "}
-                    {activeProfile?.display_name ?? "Loading..."}
                   </p>
                   <p>
                     <span className="font-semibold text-[#263b30]">Docs:</span>{" "}
@@ -528,7 +517,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         {session.title}
                       </span>
                       <span className="mt-0.5 block text-[10px] text-[#89948e]">
-                        {session.active_model_profile_id ?? "saved chat"}
+                        saved conversation
                       </span>
                     </span>
                   </button>

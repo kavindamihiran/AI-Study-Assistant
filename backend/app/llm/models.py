@@ -58,10 +58,10 @@ class ModelProfile:
 
     def public_dict(self) -> dict[str, Any]:
         return {
-            "profile_id": self.profile_id,
-            "display_name": self.display_name,
-            "provider_name": self.provider_name,
-            "model_id": self.model_id,
+            "profile_id": _public_profile_id(self.profile_id),
+            "display_name": _public_display_name(self.profile_id),
+            "provider_name": "managed",
+            "model_id": "managed",
             "max_context_tokens": self.max_context_tokens,
             "capabilities": asdict(self.capabilities),
             "defaults": asdict(self.defaults),
@@ -120,8 +120,8 @@ class NormalizedLLMResponse:
             "tool_calls": [call.as_dict() for call in self.tool_calls],
             "content_blocks": _public_content_blocks(self.content_blocks),
             "usage": self.usage.as_dict(),
-            "model_id": self.model_id,
-            "profile_id": self.profile_id,
+            "model_id": None,
+            "profile_id": "study_ai",
             "finish_reason": self.finish_reason,
             "error_type": self.error_type,
             "error_message": self.error_message,
@@ -161,3 +161,29 @@ def coerce_messages(
             raise ValueError("Every message must contain role and content")
         result.append(dict(message))
     return result
+
+
+def _public_profile_id(profile_id: str) -> str:
+    lowered = profile_id.lower()
+    if "flash" in lowered:
+        return "study_ai_fast"
+    if "advanced" in lowered:
+        return "study_ai_advanced"
+    if "balanced" in lowered:
+        return "study_ai_balanced"
+    if "long" in lowered:
+        return "study_ai_long_context"
+    if "fast" in lowered:
+        return "study_ai_fast"
+    return "study_ai_default"
+
+
+def _public_display_name(profile_id: str) -> str:
+    public_id = _public_profile_id(profile_id)
+    return {
+        "study_ai_fast": "Fast study assistant",
+        "study_ai_advanced": "Advanced study assistant",
+        "study_ai_balanced": "Balanced study assistant",
+        "study_ai_long_context": "Long-notes study assistant",
+        "study_ai_default": "Study assistant",
+    }[public_id]

@@ -18,10 +18,8 @@ import {
   DocumentRecord,
   FlashcardItem,
   MCQItem,
-  ModelProfile,
   StudyToolKind,
   StudyToolResponse,
-  getActiveProfile,
   getDocuments,
 } from "@/lib/api";
 import { StudyJob, useStudyJobs } from "@/components/study-job-provider";
@@ -35,7 +33,6 @@ const tools = [
 
 export default function StudyToolsPage() {
   const [activeTool, setActiveTool] = useState(tools[0]);
-  const [profile, setProfile] = useState<ModelProfile | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [topic, setTopic] = useState("");
@@ -50,12 +47,11 @@ export default function StudyToolsPage() {
   useEffect(() => {
     if (!activeWorkspace) return;
     setLoadingDocuments(true);
-    void Promise.all([getActiveProfile(), getDocuments(activeWorkspace.id)])
-      .then(([activeProfile, uploadedDocuments]) => {
+    void getDocuments(activeWorkspace.id)
+      .then((uploadedDocuments) => {
         const indexed = uploadedDocuments.filter(
           (document) => document.status === "indexed",
         );
-        setProfile(activeProfile);
         setDocuments(indexed);
         setSelectedIds(indexed.map((document) => document.id));
       })
@@ -76,7 +72,7 @@ export default function StudyToolsPage() {
   }, [selectedJob]);
 
   function generate() {
-    if (!profile || selectedIds.length === 0) return;
+    if (selectedIds.length === 0) return;
     setError("");
     const selectedDocuments = documents.filter((document) =>
       selectedIds.includes(document.id),
@@ -86,7 +82,6 @@ export default function StudyToolsPage() {
       documentIds: selectedIds,
       sourceNames: selectedDocuments.map((document) => document.filename),
       topic,
-      profileId: profile.profile_id,
     });
   }
 
@@ -250,7 +245,7 @@ export default function StudyToolsPage() {
               <h2 className="text-lg font-semibold">{activeTool.label} generator</h2>
               <p className="mt-1 text-xs text-[#7c8982]">
                 {selectedIds.length} source{selectedIds.length === 1 ? "" : "s"}{" "}
-                selected · {profile?.display_name ?? "active model"}
+                selected
               </p>
             </div>
             <activeTool.icon size={22} className="text-[#56843f]" />
@@ -266,7 +261,7 @@ export default function StudyToolsPage() {
           />
           <button
             onClick={() => void generate()}
-            disabled={!profile || selectedIds.length === 0}
+            disabled={selectedIds.length === 0}
             className="mt-3 flex items-center gap-2 rounded-xl bg-[#c8f169] px-5 py-3 text-sm font-semibold text-[#17321f] disabled:opacity-40"
           >
             {activeJobs.length > 0 ? (
@@ -323,7 +318,7 @@ function StudyJobOutput({ job }: { job: StudyJob }) {
       <div className="rounded-2xl bg-[#fff1ed] p-5">
         <h3 className="font-semibold text-[#8b3727]">Generation failed</h3>
         <p className="mt-2 text-sm leading-6 text-[#9c3e2c]">
-          {job.error ?? "The model could not complete this job."}
+          {job.error ?? "The AI assistant could not complete this job."}
         </p>
       </div>
     );

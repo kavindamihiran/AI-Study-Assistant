@@ -10,49 +10,49 @@ class ModelProfileRegistryTests(unittest.TestCase):
     def test_loads_environment_backed_profile(self) -> None:
         payload = [
             {
-                "profile_id": "nim",
-                "display_name": "NIM",
-                "provider_name": "nvidia_nim",
-                "base_url": "${NVIDIA_BASE_URL:-https://default.test/v1}",
-                "model_id": "${NVIDIA_MODEL_ID}",
-                "api_key_env_name": "NVIDIA_API_KEY",
+                "profile_id": "managed",
+                "display_name": "Managed AI",
+                "provider_name": "managed_ai",
+                "base_url": "${AI_BASE_URL:-https://default.test/v1}",
+                "model_id": "${AI_MODEL_ID}",
+                "api_key_env_name": "AI_API_KEY",
                 "max_context_tokens": 32000,
             }
         ]
         registry = ModelProfileRegistry.from_data(
-            payload, env={"NVIDIA_MODEL_ID": "vendor/model"}
+            payload, env={"AI_MODEL_ID": "managed/model"}
         )
 
-        profile = registry.get("nim")
+        profile = registry.get("managed")
         self.assertEqual(profile.base_url, "https://default.test/v1")
-        self.assertEqual(profile.model_id, "vendor/model")
+        self.assertEqual(profile.model_id, "managed/model")
 
     def test_uses_default_model_id_when_env_is_missing(self) -> None:
         payload = [
             {
-                "profile_id": "nim",
-                "display_name": "NIM",
-                "provider_name": "nvidia_nim",
-                "base_url": "${NVIDIA_BASE_URL:-https://default.test/v1}",
-                "model_id": "${NVIDIA_MODEL_ID:-vendor/default-model}",
-                "api_key_env_name": "NVIDIA_API_KEY",
+                "profile_id": "managed",
+                "display_name": "Managed AI",
+                "provider_name": "managed_ai",
+                "base_url": "${AI_BASE_URL:-https://default.test/v1}",
+                "model_id": "${AI_MODEL_ID:-managed/default-model}",
+                "api_key_env_name": "AI_API_KEY",
                 "max_context_tokens": 32000,
             }
         ]
         registry = ModelProfileRegistry.from_data(payload, env={})
 
-        profile = registry.get("nim")
-        self.assertEqual(profile.model_id, "vendor/default-model")
+        profile = registry.get("managed")
+        self.assertEqual(profile.model_id, "managed/default-model")
 
     def test_rejects_missing_fallback(self) -> None:
         payload = [
             {
-                "profile_id": "nim",
-                "display_name": "NIM",
-                "provider_name": "nvidia_nim",
+                "profile_id": "managed",
+                "display_name": "Managed AI",
+                "provider_name": "managed_ai",
                 "base_url": "https://example.test/v1",
-                "model_id": "vendor/model",
-                "api_key_env_name": "NVIDIA_API_KEY",
+                "model_id": "managed/model",
+                "api_key_env_name": "AI_API_KEY",
                 "max_context_tokens": 32000,
                 "fallback_model_profile_id": "missing",
             }

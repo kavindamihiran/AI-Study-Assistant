@@ -26,7 +26,6 @@ export type StudyJob = {
   documentIds: string[];
   sourceNames: string[];
   topic: string;
-  profileId?: string;
   status: StudyJobStatus;
   result: StudyToolResponse | null;
   error: string | null;
@@ -36,7 +35,7 @@ export type StudyJob = {
 
 type EnqueueStudyJob = Pick<
   StudyJob,
-  "tool" | "documentIds" | "sourceNames" | "topic" | "profileId"
+  "tool" | "documentIds" | "sourceNames" | "topic"
 >;
 
 type StudyJobContextValue = {
@@ -123,12 +122,7 @@ export function StudyJobProvider({ children }: { children: ReactNode }) {
       ),
     );
 
-    void generateStudyTool(
-      nextJob.tool,
-      nextJob.documentIds,
-      nextJob.topic,
-      nextJob.profileId,
-    )
+    void generateStudyTool(nextJob.tool, nextJob.documentIds, nextJob.topic)
       .then((result) => {
         setJobs((current) =>
           current.map((job) =>

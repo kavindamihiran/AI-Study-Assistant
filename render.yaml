@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: studyos-kavinda-api-2026
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -e .
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_DEFAULT_MODEL_ID
+        sync: false
+      - key: ACTIVE_MODEL_PROFILE_ID
+        value: study_ai_default
+      - key: FRONTEND_URL
+        value: https://studyos-kavinda-web-2026.onrender.com
+      - key: DATA_DIR
+        value: /tmp/studyos
+      - key: MAX_UPLOAD_MB
+        value: "25"
+      - key: VECTOR_STORE_PROVIDER
+        value: local
+      - key: EMBEDDING_PROVIDER
+        value: local
+      - key: EMBEDDING_DIMENSION
+        value: "384"
+      - key: LLM_REQUEST_TIMEOUT_SECONDS
+        value: "90"
+
+  - type: web
+    name: studyos-kavinda-web-2026
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./out
+    autoDeployTrigger: commit
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: https://studyos-kavinda-api-2026.onrender.com
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin

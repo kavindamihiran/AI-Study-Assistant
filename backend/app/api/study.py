@@ -16,7 +16,6 @@ router = APIRouter(prefix="/api/study", tags=["study"])
 class StudyRequest(BaseModel):
     document_ids: list[str] = Field(min_length=1)
     topic: str | None = Field(default=None, max_length=2000)
-    profile_id: str | None = None
     count: int = Field(default=8, ge=1, le=20)
     days: int = Field(default=7, ge=1, le=30)
 
@@ -93,7 +92,7 @@ def _normalize_items(parsed: Any, aliases: tuple[str, ...]) -> dict[str, Any]:
         for alias in aliases:
             if isinstance(parsed.get(alias), list):
                 return {"items": parsed[alias]}
-    raise ValueError("The model did not return a valid item list")
+    raise ValueError("The AI assistant did not return a valid item list")
 
 
 def _record_run(
@@ -122,7 +121,7 @@ async def _generate(
 ) -> dict[str, Any]:
     store: DocumentStore = request.app.state.document_store
     gateway: LLMGateway = request.app.state.llm_gateway
-    profile_id = payload.profile_id or gateway.active_profile_id
+    profile_id = gateway.active_profile_id
     focus = payload.topic.strip() if payload.topic and payload.topic.strip() else None
     chunks = await store.get_study_chunks(
         document_ids=list(dict.fromkeys(payload.document_ids)),
@@ -196,7 +195,7 @@ async def _generate(
             except (ValidationError, ValueError) as exc:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"The model returned invalid MCQ data: {exc}",
+                    detail=f"The AI assistant returned invalid MCQ data: {exc}",
                 ) from exc
     else:
         prompt = (
@@ -220,20 +219,21 @@ async def _generate(
             except (ValidationError, ValueError) as exc:
                 raise HTTPException(
                     status_code=502,
-                    detail=f"The model returned invalid flashcard data: {exc}",
+                    detail=f"The AI assistant returned invalid flashcard data: {exc}",
                 ) from exc
 
     _record_run(store, result, profile_id, tool)
     if not result.ok:
-        raise HTTPException(status_code=502, detail=result.public_dict())
+        raise HTTPException(
+            status_code=502,
+            detail="The AI assistant is temporarily unavailable. Please try again.",
+        )
 
     return {
         "tool": tool,
         "text": text,
         "data": data,
         "citations": _citations(chunks),
-        "model_id": result.model_id,
-        "profile_id": result.profile_id or profile_id,
         "latency_ms": result.latency_ms,
     }
 

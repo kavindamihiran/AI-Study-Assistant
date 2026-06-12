@@ -17,16 +17,13 @@ import { MarkdownText } from "@/components/markdown-text";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
-  ModelProfile,
   ChatSessionSummary,
   getChatSession,
   getChatSessions,
-  getActiveProfile,
   getDocuments,
 } from "@/lib/api";
 
 export default function ChatPage() {
-  const [profile, setProfile] = useState<ModelProfile | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
@@ -47,16 +44,14 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!activeWorkspace) return;
-    void Promise.all([getActiveProfile(), getDocuments(activeWorkspace.id)])
-      .then(([active, indexedDocuments]) => {
-        setProfile(active);
+    void getDocuments(activeWorkspace.id)
+      .then((indexedDocuments) => {
         setDocuments(indexedDocuments);
         if (!sourceSelectionInitialized && indexedDocuments.length) {
           initializeDocumentSelection(indexedDocuments.map((document) => document.id));
         }
       })
       .catch(() => {
-        setProfile(null);
         setDocuments([]);
       });
   }, [activeWorkspace?.id, initializeDocumentSelection, sourceSelectionInitialized]);
@@ -105,7 +100,7 @@ export default function ChatPage() {
         description={`Questions are matched against documents in ${activeWorkspace?.title ?? "this study session"}.`}
         action={
           <div className="rounded-full border border-[#dfe5e1] bg-white px-3 py-1.5 text-xs text-[#65736c]">
-            {profile?.display_name ?? "Loading active model..."}
+            AI answers ready
           </div>
         }
       />
@@ -266,7 +261,7 @@ export default function ChatPage() {
                     {savedSession.title}
                   </span>
                   <span className="mt-1 block truncate text-[9px] text-[#89948e]">
-                    {savedSession.active_model_profile_id ?? "saved chat"}
+                    saved conversation
                   </span>
                 </button>
               ))}

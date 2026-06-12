@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DEFAULT_ACTIVE_PROFILE_ID = "nvidia_nemotron_default"
+DEFAULT_ACTIVE_PROFILE_ID = "study_ai_default"
 DEFAULT_PROFILES_PATH = Path(__file__).with_name("llm") / "profiles.json"
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 90.0
 DEFAULT_FRONTEND_URL = "http://localhost:3000"
@@ -14,7 +14,7 @@ DEFAULT_MAX_UPLOAD_MB = 25
 DEFAULT_VECTOR_STORE_PROVIDER = "local"
 DEFAULT_EMBEDDING_PROVIDER = "local"
 DEFAULT_EMBEDDING_DIMENSION = 384
-DEFAULT_NVIDIA_EMBEDDING_MODEL_ID = "nvidia/llama-nemotron-embed-1b-v2"
+DEFAULT_HOSTED_EMBEDDING_MODEL_ID = ""
 
 
 def _parse_env_line(line: str) -> tuple[str, str] | None:
@@ -63,7 +63,7 @@ class Settings:
     vector_store_provider: str = DEFAULT_VECTOR_STORE_PROVIDER
     embedding_provider: str = DEFAULT_EMBEDDING_PROVIDER
     embedding_dimension: int = DEFAULT_EMBEDDING_DIMENSION
-    nvidia_embedding_model_id: str = DEFAULT_NVIDIA_EMBEDDING_MODEL_ID
+    hosted_embedding_model_id: str = DEFAULT_HOSTED_EMBEDDING_MODEL_ID
     pinecone_api_key: str | None = None
     pinecone_index_host: str | None = None
     pinecone_namespace: str = "study-assistant"
@@ -104,9 +104,9 @@ class Settings:
                     str(DEFAULT_EMBEDDING_DIMENSION),
                 )
             ),
-            nvidia_embedding_model_id=os.getenv(
-                "NVIDIA_EMBEDDING_MODEL_ID",
-                DEFAULT_NVIDIA_EMBEDDING_MODEL_ID,
+            hosted_embedding_model_id=os.getenv(
+                "AI_EMBEDDING_MODEL_ID",
+                DEFAULT_HOSTED_EMBEDDING_MODEL_ID,
             ),
             pinecone_api_key=os.getenv("PINECONE_API_KEY"),
             pinecone_index_host=os.getenv("PINECONE_INDEX_HOST"),

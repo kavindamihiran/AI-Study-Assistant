@@ -248,7 +248,8 @@ class DocumentApiTests(unittest.TestCase):
         )
         self.assertEqual(chat.status_code, 200)
         self.assertEqual(chat.json()["citations"], [])
-        self.assertEqual(chat.json()["profile_id"], "nvidia_nemotron_default")
+        self.assertNotIn("profile_id", chat.json())
+        self.assertNotIn("model_id", chat.json())
         session_id = chat.json()["session_id"]
         saved_session = self.client.get(f"/api/chat/sessions/{session_id}")
         self.assertEqual(saved_session.status_code, 200)
