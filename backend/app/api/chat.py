@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.documents.store import DocumentStore
+from app.auth import current_auth, require_authenticated_request
 from app.llm.gateway import LLMGateway
 from app.llm.models import ChatMessage
 
 
-router = APIRouter(prefix="/api/chat", tags=["chat"])
+router = APIRouter(
+    prefix="/api/chat",
+    tags=["chat"],
+    dependencies=[Depends(require_authenticated_request)],
+)
 CHAT_PROFILE_ID = "study_ai_default"
 
 
@@ -23,23 +28,30 @@ class ChatRequest(BaseModel):
 async def chat(payload: ChatRequest, request: Request) -> dict:
     store: DocumentStore = request.app.state.document_store
     gateway: LLMGateway = request.app.state.llm_gateway
+    user_id = current_auth(request).user_id
     profile_id = CHAT_PROFILE_ID
-    session_id = store.ensure_chat_session(
-        session_id=payload.session_id,
-        query=payload.query,
-        profile_id=profile_id,
-        study_session_id=payload.study_session_id,
-    )
+    try:
+        session_id = store.ensure_chat_session(
+            session_id=payload.session_id,
+            query=payload.query,
+            profile_id=profile_id,
+            study_session_id=payload.study_session_id,
+            user_id=user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     store.add_chat_message(
         session_id=session_id,
         role="user",
         content=payload.query,
         profile_id=profile_id,
+        user_id=user_id,
     )
     chunks = await store.retrieve(
         payload.query,
         document_ids=payload.document_ids,
         limit=5,
+        user_id=user_id,
     )
     if not chunks:
         answer = "I could not find this in your uploaded notes."
@@ -49,6 +61,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
             content=answer,
             citations=[],
             profile_id=profile_id,
+            user_id=user_id,
         )
         return {
             "session_id": session_id,
@@ -94,6 +107,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         status="success" if result.ok else "error",
         error_message=result.error_message,
         retry_count=result.retry_count,
+        user_id=user_id,
     )
     if not result.ok:
         raise HTTPException(
@@ -118,6 +132,7 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         content=result.text,
         citations=citations,
         profile_id=result.profile_id,
+        user_id=user_id,
     )
     return {
         "session_id": session_id,
@@ -132,13 +147,19 @@ async def list_chat_sessions(
     request: Request, study_session_id: str | None = None
 ) -> dict:
     store: DocumentStore = request.app.state.document_store
-    return {"sessions": store.list_chat_sessions(study_session_id)}
+    return {
+        "sessions": store.list_chat_sessions(
+            study_session_id, user_id=current_auth(request).user_id
+        )
+    }
 
 
 @router.get("/sessions/{session_id}")
 async def get_chat_session(session_id: str, request: Request) -> dict:
     store: DocumentStore = request.app.state.document_store
-    chat_session = store.get_chat_session(session_id)
+    chat_session = store.get_chat_session(
+        session_id, user_id=current_auth(request).user_id
+    )
     if chat_session is None:
         raise HTTPException(status_code=404, detail="Chat session not found")
     return chat_session
@@ -147,5 +168,7 @@ async def get_chat_session(session_id: str, request: Request) -> dict:
 @router.delete("/sessions/{session_id}", status_code=204)
 async def delete_chat_session(session_id: str, request: Request) -> None:
     store: DocumentStore = request.app.state.document_store
-    if not store.delete_chat_session(session_id):
+    if not store.delete_chat_session(
+        session_id, user_id=current_auth(request).user_id
+    ):
         raise HTTPException(status_code=404, detail="Chat session not found")

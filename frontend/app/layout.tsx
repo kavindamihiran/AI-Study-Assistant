@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AuthProvider } from "@/components/auth-provider";
 import { ChatProvider } from "@/components/chat-provider";
 import { StudyJobProvider } from "@/components/study-job-provider";
 import { StudyWorkspaceProvider } from "@/components/study-workspace-provider";
@@ -17,11 +18,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <StudyWorkspaceProvider>
-          <ChatProvider>
-            <StudyJobProvider>{children}</StudyJobProvider>
-          </ChatProvider>
-        </StudyWorkspaceProvider>
+        <AuthProvider>
+          <StudyWorkspaceProvider>
+            <ChatProvider>
+              <StudyJobProvider>{children}</StudyJobProvider>
+            </ChatProvider>
+          </StudyWorkspaceProvider>
+        </AuthProvider>
       </body>
     </html>
   );

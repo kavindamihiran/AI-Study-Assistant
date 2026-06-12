@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from app.documents.store import DocumentStore
+from app.auth import current_auth, require_authenticated_request
 from app.llm.gateway import LLMGateway
 from app.llm.models import ChatMessage, NormalizedLLMResponse
 
 
-router = APIRouter(prefix="/api/study", tags=["study"])
+router = APIRouter(
+    prefix="/api/study",
+    tags=["study"],
+    dependencies=[Depends(require_authenticated_request)],
+)
 
 
 class StudyRequest(BaseModel):
@@ -100,6 +105,7 @@ def _record_run(
     result: NormalizedLLMResponse,
     profile_id: str,
     tool: str,
+    user_id: str,
 ) -> None:
     store.record_model_run(
         session_id=None,
@@ -111,6 +117,7 @@ def _record_run(
         error_message=result.error_message,
         retry_count=result.retry_count,
         graph_node_name=f"study_{tool}",
+        user_id=user_id,
     )
 
 
@@ -121,11 +128,13 @@ async def _generate(
 ) -> dict[str, Any]:
     store: DocumentStore = request.app.state.document_store
     gateway: LLMGateway = request.app.state.llm_gateway
+    user_id = current_auth(request).user_id
     profile_id = gateway.active_profile_id
     focus = payload.topic.strip() if payload.topic and payload.topic.strip() else None
     chunks = await store.get_study_chunks(
         document_ids=list(dict.fromkeys(payload.document_ids)),
         focus=focus,
+        user_id=user_id,
     )
     if not chunks:
         raise HTTPException(
@@ -222,7 +231,7 @@ async def _generate(
                     detail=f"The AI assistant returned invalid flashcard data: {exc}",
                 ) from exc
 
-    _record_run(store, result, profile_id, tool)
+    _record_run(store, result, profile_id, tool, user_id)
     if not result.ok:
         raise HTTPException(
             status_code=502,

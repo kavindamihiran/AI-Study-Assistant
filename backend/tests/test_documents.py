@@ -212,11 +212,110 @@ class DocumentApiTests(unittest.TestCase):
         settings = Settings(data_dir=RUNTIME_DIR)
         self.app = create_app(settings)
         self.app.state.llm_gateway = FakeStudyGateway()
+        self.anon = TestClient(self.app)
         self.client = TestClient(self.app)
+        self.csrf = self._register(self.client, "learner@example.com")
+        self.auth_headers = {"X-CSRF-Token": self.csrf}
 
     def tearDown(self) -> None:
         self.app.state.database.engine.dispose()
         shutil.rmtree(RUNTIME_DIR, ignore_errors=True)
+
+    def _register(self, client: TestClient, email: str) -> str:
+        response = client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "correct horse battery staple",
+                "display_name": email.split("@", 1)[0],
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["user"]["email"], email)
+        return payload["csrf_token"]
+
+    def test_requires_authentication_and_csrf(self) -> None:
+        self.assertEqual(self.anon.get("/api/documents").status_code, 401)
+
+        missing_csrf = self.client.post(
+            "/api/study-sessions",
+            json={"title": "No CSRF"},
+        )
+        self.assertEqual(missing_csrf.status_code, 403)
+
+        created = self.client.post(
+            "/api/study-sessions",
+            json={"title": "Databases"},
+            headers=self.auth_headers,
+        )
+        self.assertEqual(created.status_code, 201)
+
+    def test_registration_is_rate_limited(self) -> None:
+        client = TestClient(self.app)
+
+        for index in range(9):
+            response = client.post(
+                "/api/auth/register",
+                json={
+                    "email": f"public-{index}@example.com",
+                    "password": "correct horse battery staple",
+                    "display_name": f"public-{index}",
+                },
+            )
+            self.assertEqual(response.status_code, 201)
+
+        blocked = client.post(
+            "/api/auth/register",
+            json={
+                "email": "public-blocked@example.com",
+                "password": "correct horse battery staple",
+                "display_name": "blocked",
+            },
+        )
+        self.assertEqual(blocked.status_code, 429)
+
+    def test_users_cannot_access_each_others_material(self) -> None:
+        other = TestClient(self.app)
+        other_csrf = self._register(other, "other@example.com")
+        other_headers = {"X-CSRF-Token": other_csrf}
+
+        workspace = self.client.post(
+            "/api/study-sessions",
+            json={"title": "Private subject"},
+            headers=self.auth_headers,
+        ).json()
+        uploaded = self.client.post(
+            "/api/documents/upload",
+            data={"study_session_id": workspace["id"]},
+            files={
+                "file": (
+                    "lecture.txt",
+                    b"Normalization reduces database update anomalies.",
+                    "text/plain",
+                )
+            },
+            headers=self.auth_headers,
+        ).json()
+
+        self.assertEqual(other.get("/api/documents").json()["documents"], [])
+        self.assertEqual(
+            other.get(f"/api/documents/{uploaded['id']}").status_code,
+            404,
+        )
+        self.assertEqual(
+            other.delete(
+                f"/api/study-sessions/{workspace['id']}",
+                headers=other_headers,
+            ).status_code,
+            404,
+        )
+        isolated = other.post(
+            "/api/study/summary",
+            json={"document_ids": [uploaded["id"]]},
+            headers=other_headers,
+        )
+        self.assertEqual(isolated.status_code, 422)
 
     def test_upload_list_and_delete(self) -> None:
         response = self.client.post(
@@ -228,6 +327,7 @@ class DocumentApiTests(unittest.TestCase):
                     "text/plain",
                 )
             },
+            headers=self.auth_headers,
         )
         self.assertEqual(response.status_code, 201)
         document = response.json()
@@ -237,7 +337,8 @@ class DocumentApiTests(unittest.TestCase):
         self.assertEqual(listed[0]["id"], document["id"])
 
         reindexed = self.client.post(
-            f"/api/documents/{document['id']}/reindex"
+            f"/api/documents/{document['id']}/reindex",
+            headers=self.auth_headers,
         )
         self.assertEqual(reindexed.status_code, 200)
         self.assertEqual(reindexed.json()["status"], "indexed")
@@ -245,6 +346,7 @@ class DocumentApiTests(unittest.TestCase):
         chat = self.client.post(
             "/api/chat",
             json={"query": "quantum mechanics", "document_ids": [document["id"]]},
+            headers=self.auth_headers,
         )
         self.assertEqual(chat.status_code, 200)
         self.assertEqual(chat.json()["citations"], [])
@@ -254,10 +356,16 @@ class DocumentApiTests(unittest.TestCase):
         saved_session = self.client.get(f"/api/chat/sessions/{session_id}")
         self.assertEqual(saved_session.status_code, 200)
         self.assertEqual(len(saved_session.json()["messages"]), 2)
-        deleted_session = self.client.delete(f"/api/chat/sessions/{session_id}")
+        deleted_session = self.client.delete(
+            f"/api/chat/sessions/{session_id}",
+            headers=self.auth_headers,
+        )
         self.assertEqual(deleted_session.status_code, 204)
 
-        deleted = self.client.delete(f"/api/documents/{document['id']}")
+        deleted = self.client.delete(
+            f"/api/documents/{document['id']}",
+            headers=self.auth_headers,
+        )
         self.assertEqual(deleted.status_code, 204)
 
     def test_generates_grounded_study_material(self) -> None:
@@ -270,11 +378,13 @@ class DocumentApiTests(unittest.TestCase):
                     "text/plain",
                 )
             },
+            headers=self.auth_headers,
         ).json()
 
         summary = self.client.post(
             "/api/study/summary",
             json={"document_ids": [uploaded["id"]]},
+            headers=self.auth_headers,
         )
         self.assertEqual(summary.status_code, 200)
         self.assertIn("Normalization", summary.json()["text"])
@@ -287,6 +397,7 @@ class DocumentApiTests(unittest.TestCase):
                 "topic": "normalization",
                 "count": 1,
             },
+            headers=self.auth_headers,
         )
         self.assertEqual(mcqs.status_code, 200)
         item = mcqs.json()["data"]["items"][0]
@@ -296,6 +407,7 @@ class DocumentApiTests(unittest.TestCase):
         flashcards = self.client.post(
             "/api/study/flashcards",
             json={"document_ids": [uploaded["id"]], "count": 1},
+            headers=self.auth_headers,
         )
         self.assertEqual(flashcards.status_code, 200)
         self.assertIn("normalization", flashcards.json()["data"]["items"][0]["front"].lower())
@@ -304,6 +416,7 @@ class DocumentApiTests(unittest.TestCase):
         workspace = self.client.post(
             "/api/study-sessions",
             json={"title": "Databases"},
+            headers=self.auth_headers,
         ).json()
         uploaded = self.client.post(
             "/api/documents/upload",
@@ -315,6 +428,7 @@ class DocumentApiTests(unittest.TestCase):
                     "text/plain",
                 )
             },
+            headers=self.auth_headers,
         ).json()
         chat = self.client.post(
             "/api/chat",
@@ -323,6 +437,7 @@ class DocumentApiTests(unittest.TestCase):
                 "document_ids": [uploaded["id"]],
                 "study_session_id": workspace["id"],
             },
+            headers=self.auth_headers,
         )
         self.assertEqual(chat.status_code, 200)
         self.assertEqual(
@@ -334,7 +449,10 @@ class DocumentApiTests(unittest.TestCase):
             1,
         )
 
-        deleted = self.client.delete(f"/api/study-sessions/{workspace['id']}")
+        deleted = self.client.delete(
+            f"/api/study-sessions/{workspace['id']}",
+            headers=self.auth_headers,
+        )
         self.assertEqual(deleted.status_code, 204)
         self.assertEqual(
             self.client.get(f"/api/study-sessions/{workspace['id']}").status_code,

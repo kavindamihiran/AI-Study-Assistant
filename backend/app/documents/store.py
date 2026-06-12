@@ -164,26 +164,32 @@ class DocumentStore:
                     )
         legacy_index.rename(legacy_index.with_suffix(".json.migrated"))
 
-    def create_study_session(self, title: str | None = None) -> dict[str, Any]:
+    def create_study_session(
+        self, title: str | None = None, *, user_id: str | None = None
+    ) -> dict[str, Any]:
         session_id = uuid.uuid4().hex
         session_title = (title or "New study session").strip()[:120]
         with self.database.session() as session:
-            item = StudySessionModel(id=session_id, title=session_title)
+            item = StudySessionModel(
+                id=session_id, user_id=user_id, title=session_title
+            )
             session.add(item)
-        session_item = self.get_study_session(session_id)
+        session_item = self.get_study_session(session_id, user_id=user_id)
         if session_item is None:
             raise RuntimeError("Study session disappeared after creation")
         return session_item
 
-    def list_study_sessions(self) -> list[dict[str, Any]]:
-        with self.database.session() as session:
-            items = list(
-                session.scalars(
-                    select(StudySessionModel).order_by(
-                        StudySessionModel.updated_at.desc()
-                    )
-                )
+    def list_study_sessions(
+        self, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        statement = select(StudySessionModel)
+        if user_id is not None:
+            statement = statement.where(
+                StudySessionModel.user_id == user_id
             )
+        statement = statement.order_by(StudySessionModel.updated_at.desc())
+        with self.database.session() as session:
+            items = list(session.scalars(statement))
         return [
             {
                 "id": item.id,
@@ -194,9 +200,18 @@ class DocumentStore:
             for item in items
         ]
 
-    def get_study_session(self, study_session_id: str) -> dict[str, Any] | None:
+    def get_study_session(
+        self, study_session_id: str, *, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         with self.database.session() as session:
-            item = session.get(StudySessionModel, study_session_id)
+            statement = select(StudySessionModel).where(
+                StudySessionModel.id == study_session_id
+            )
+            if user_id is not None:
+                statement = statement.where(
+                    StudySessionModel.user_id == user_id
+                )
+            item = session.scalar(statement)
             if item is None:
                 return None
             return {
@@ -206,27 +221,50 @@ class DocumentStore:
                 "updated_at": item.updated_at.isoformat(),
             }
 
-    def _is_default_study_session(self, study_session_id: str) -> bool:
+    def _is_default_study_session(
+        self, study_session_id: str, *, user_id: str | None = None
+    ) -> bool:
         with self.database.session() as session:
+            general_statement = select(StudySessionModel.id).where(
+                StudySessionModel.title == "General study session"
+            )
+            oldest_statement = select(StudySessionModel.id)
+            if user_id is not None:
+                general_statement = general_statement.where(
+                    StudySessionModel.user_id == user_id
+                )
+                oldest_statement = oldest_statement.where(
+                    StudySessionModel.user_id == user_id
+                )
             general = session.scalar(
-                select(StudySessionModel.id)
-                .where(StudySessionModel.title == "General study session")
-                .order_by(StudySessionModel.created_at.asc())
-                .limit(1)
+                general_statement.order_by(
+                    StudySessionModel.created_at.asc()
+                ).limit(1)
             )
             if general:
                 return general == study_session_id
             oldest = session.scalar(
-                select(StudySessionModel.id)
-                .order_by(StudySessionModel.created_at.asc())
-                .limit(1)
+                oldest_statement.order_by(
+                    StudySessionModel.created_at.asc()
+                ).limit(1)
             )
             return oldest == study_session_id
 
-    async def delete_study_session(self, study_session_id: str) -> bool:
-        include_unassigned = self._is_default_study_session(study_session_id)
+    async def delete_study_session(
+        self, study_session_id: str, *, user_id: str | None = None
+    ) -> bool:
+        include_unassigned = self._is_default_study_session(
+            study_session_id, user_id=user_id
+        )
         with self.database.session() as session:
-            study_session = session.get(StudySessionModel, study_session_id)
+            session_statement = select(StudySessionModel).where(
+                StudySessionModel.id == study_session_id
+            )
+            if user_id is not None:
+                session_statement = session_statement.where(
+                    StudySessionModel.user_id == user_id
+                )
+            study_session = session.scalar(session_statement)
             if study_session is None:
                 return False
 
@@ -235,11 +273,32 @@ class DocumentStore:
             if include_unassigned:
                 document_filter = or_(
                     document_filter,
-                    DocumentModel.study_session_id.is_(None),
+                    (
+                        DocumentModel.study_session_id.is_(None)
+                        if user_id is None
+                        else (
+                            DocumentModel.study_session_id.is_(None)
+                            & (DocumentModel.user_id == user_id)
+                        )
+                    ),
                 )
                 chat_filter = or_(
                     chat_filter,
-                    ChatSessionModel.study_session_id.is_(None),
+                    (
+                        ChatSessionModel.study_session_id.is_(None)
+                        if user_id is None
+                        else (
+                            ChatSessionModel.study_session_id.is_(None)
+                            & (ChatSessionModel.user_id == user_id)
+                        )
+                    ),
+                )
+            if user_id is not None:
+                document_filter = (
+                    document_filter & (DocumentModel.user_id == user_id)
+                )
+                chat_filter = (
+                    chat_filter & (ChatSessionModel.user_id == user_id)
                 )
 
             documents = list(
@@ -275,7 +334,14 @@ class DocumentStore:
                     delete(DocumentModel).where(DocumentModel.id.in_(document_ids))
                 )
             session.execute(
-                delete(StudySessionModel).where(StudySessionModel.id == study_session_id)
+                delete(StudySessionModel).where(
+                    StudySessionModel.id == study_session_id,
+                    *(
+                        [StudySessionModel.user_id == user_id]
+                        if user_id is not None
+                        else []
+                    ),
+                )
             )
 
         for stored_path in stored_paths:
@@ -283,14 +349,21 @@ class DocumentStore:
         return True
 
     def list_documents(
-        self, study_session_id: str | None = None
+        self,
+        study_session_id: str | None = None,
+        *,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         with self.database.session() as session:
             statement = select(DocumentModel).order_by(
                 DocumentModel.created_at.desc()
             )
+            if user_id is not None:
+                statement = statement.where(DocumentModel.user_id == user_id)
             if study_session_id:
-                if self._is_default_study_session(study_session_id):
+                if self._is_default_study_session(
+                    study_session_id, user_id=user_id
+                ):
                     statement = statement.where(
                         or_(
                             DocumentModel.study_session_id == study_session_id,
@@ -304,9 +377,16 @@ class DocumentStore:
             documents = list(session.scalars(statement))
         return [_document_dict(document) for document in documents]
 
-    def get_document(self, document_id: str) -> dict[str, Any] | None:
+    def get_document(
+        self, document_id: str, *, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         with self.database.session() as session:
-            document = session.get(DocumentModel, document_id)
+            statement = select(DocumentModel).where(
+                DocumentModel.id == document_id
+            )
+            if user_id is not None:
+                statement = statement.where(DocumentModel.user_id == user_id)
+            document = session.scalar(statement)
             return _document_dict(document) if document else None
 
     async def ingest(
@@ -316,11 +396,16 @@ class DocumentStore:
         content_type: str | None,
         content: bytes,
         study_session_id: str | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         document_id = uuid.uuid4().hex
         safe_name = Path(filename).name
         extension = Path(safe_name).suffix.lower()
         stored_path = self.uploads_dir / f"{document_id}{extension}"
+        if study_session_id and self.get_study_session(
+            study_session_id, user_id=user_id
+        ) is None:
+            raise ValueError("Study session not found")
         sections = await asyncio.to_thread(extract_sections, safe_name, content)
         chunks = chunk_sections(sections)
         character_count = sum(len(section.text) for section in sections)
@@ -339,6 +424,7 @@ class DocumentStore:
             session.add(
                 DocumentModel(
                     id=document_id,
+                    user_id=user_id,
                     filename=safe_name,
                     file_type=extension.lstrip("."),
                     content_type=content_type,
@@ -390,28 +476,49 @@ class DocumentStore:
                     document.updated_at = datetime.now(UTC)
             raise
 
-        document = self.get_document(document_id)
+        document = self.get_document(document_id, user_id=user_id)
         if document is None:
             raise RuntimeError("Document disappeared after ingestion")
         return document
 
-    async def delete(self, document_id: str) -> bool:
+    async def delete(
+        self, document_id: str, *, user_id: str | None = None
+    ) -> bool:
         with self.database.session() as session:
-            document = session.get(DocumentModel, document_id)
+            statement = select(DocumentModel).where(
+                DocumentModel.id == document_id
+            )
+            if user_id is not None:
+                statement = statement.where(DocumentModel.user_id == user_id)
+            document = session.scalar(statement)
             if document is None:
                 return False
             stored_path = document.stored_path
         await asyncio.to_thread(self.vector_store.delete_document, document_id)
         with self.database.session() as session:
             session.execute(
-                delete(DocumentModel).where(DocumentModel.id == document_id)
+                delete(DocumentModel).where(
+                    DocumentModel.id == document_id,
+                    *(
+                        [DocumentModel.user_id == user_id]
+                        if user_id is not None
+                        else []
+                    ),
+                )
             )
         await asyncio.to_thread(Path(stored_path).unlink, missing_ok=True)
         return True
 
-    async def reindex(self, document_id: str) -> dict[str, Any] | None:
+    async def reindex(
+        self, document_id: str, *, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         with self.database.session() as session:
-            document = session.get(DocumentModel, document_id)
+            statement = select(DocumentModel).where(
+                DocumentModel.id == document_id
+            )
+            if user_id is not None:
+                statement = statement.where(DocumentModel.user_id == user_id)
+            document = session.scalar(statement)
             if document is None:
                 return None
             document.status = "processing"
@@ -457,10 +564,13 @@ class DocumentStore:
                     document.status = "failed"
                     document.error = str(exc)
             raise
-        return self.get_document(document_id)
+        return self.get_document(document_id, user_id=user_id)
 
     def _load_chunks(
-        self, document_ids: list[str] | None = None
+        self,
+        document_ids: list[str] | None = None,
+        *,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         statement = (
             select(DocumentChunkModel)
@@ -476,6 +586,8 @@ class DocumentStore:
             statement = statement.where(
                 DocumentChunkModel.document_id.in_(document_ids)
             )
+        if user_id is not None:
+            statement = statement.where(DocumentModel.user_id == user_id)
         with self.database.session() as session:
             chunks = list(session.scalars(statement))
             return [
@@ -497,15 +609,23 @@ class DocumentStore:
         *,
         document_ids: list[str] | None = None,
         limit: int = 5,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
+        chunks = await asyncio.to_thread(
+            self._load_chunks, document_ids, user_id=user_id
+        )
+        if not chunks:
+            return []
+        owned_document_ids = list(
+            dict.fromkeys(chunk["document_id"] for chunk in chunks)
+        )
         query_vector = await self.embedder.embed_query(query)
         vector_matches = await asyncio.to_thread(
             self.vector_store.query,
             query_vector,
-            document_ids=document_ids,
+            document_ids=owned_document_ids,
             limit=max(limit * 4, 20),
         )
-        chunks = await asyncio.to_thread(self._load_chunks, document_ids)
         chunks_by_id = {chunk["id"]: chunk for chunk in chunks}
         vector_scores = {
             match.chunk_id: max(0.0, match.score) for match in vector_matches
@@ -555,9 +675,12 @@ class DocumentStore:
         document_ids: list[str],
         focus: str | None = None,
         max_characters: int = 50000,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build broad, document-balanced context with optional focus weighting."""
-        chunks = await asyncio.to_thread(self._load_chunks, document_ids)
+        chunks = await asyncio.to_thread(
+            self._load_chunks, document_ids, user_id=user_id
+        )
         if not chunks:
             return []
 
@@ -580,6 +703,7 @@ class DocumentStore:
                 focus.strip(),
                 document_ids=document_ids,
                 limit=min(12, len(chunks)),
+                user_id=user_id,
             )
             focus_budget = max_characters // 3
             for chunk in focused:
@@ -645,20 +769,36 @@ class DocumentStore:
         query: str,
         profile_id: str | None,
         study_session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         session_id = session_id or uuid.uuid4().hex
         with self.database.session() as session:
+            if study_session_id:
+                study_session_statement = select(
+                    StudySessionModel.id
+                ).where(StudySessionModel.id == study_session_id)
+                if user_id is not None:
+                    study_session_statement = (
+                        study_session_statement.where(
+                            StudySessionModel.user_id == user_id
+                        )
+                    )
+                if session.scalar(study_session_statement) is None:
+                    raise ValueError("Study session not found")
             chat_session = session.get(ChatSessionModel, session_id)
             if chat_session is None:
                 session.add(
                     ChatSessionModel(
                         id=session_id,
+                        user_id=user_id,
                         title=query[:80],
                         active_model_profile_id=profile_id,
                         study_session_id=study_session_id,
                     )
                 )
             else:
+                if user_id is not None and chat_session.user_id != user_id:
+                    raise ValueError("Chat session not found")
                 chat_session.updated_at = datetime.now(UTC)
                 chat_session.active_model_profile_id = profile_id
                 if study_session_id:
@@ -673,8 +813,18 @@ class DocumentStore:
         content: str,
         citations: list[dict[str, Any]] | None = None,
         profile_id: str | None = None,
+        user_id: str | None = None,
     ) -> None:
         with self.database.session() as session:
+            chat_statement = select(ChatSessionModel.id).where(
+                ChatSessionModel.id == session_id
+            )
+            if user_id is not None:
+                chat_statement = chat_statement.where(
+                    ChatSessionModel.user_id == user_id
+                )
+            if session.scalar(chat_statement) is None:
+                raise ValueError("Chat session not found")
             session.add(
                 ChatMessageModel(
                     id=uuid.uuid4().hex,
@@ -702,11 +852,13 @@ class DocumentStore:
         error_message: str | None,
         retry_count: int,
         graph_node_name: str = "rag_answer",
+        user_id: str | None = None,
     ) -> None:
         with self.database.session() as session:
             session.add(
                 ModelRunModel(
                     id=uuid.uuid4().hex,
+                    user_id=user_id,
                     session_id=session_id,
                     model_profile_id=profile_id,
                     graph_node_name=graph_node_name,
@@ -721,14 +873,23 @@ class DocumentStore:
             )
 
     def list_chat_sessions(
-        self, study_session_id: str | None = None
+        self,
+        study_session_id: str | None = None,
+        *,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         with self.database.session() as session:
             statement = select(ChatSessionModel).order_by(
                 ChatSessionModel.updated_at.desc()
             )
+            if user_id is not None:
+                statement = statement.where(
+                    ChatSessionModel.user_id == user_id
+                )
             if study_session_id:
-                if self._is_default_study_session(study_session_id):
+                if self._is_default_study_session(
+                    study_session_id, user_id=user_id
+                ):
                     statement = statement.where(
                         or_(
                             ChatSessionModel.study_session_id == study_session_id,
@@ -752,9 +913,18 @@ class DocumentStore:
             for item in sessions
         ]
 
-    def get_chat_session(self, session_id: str) -> dict[str, Any] | None:
+    def get_chat_session(
+        self, session_id: str, *, user_id: str | None = None
+    ) -> dict[str, Any] | None:
         with self.database.session() as session:
-            chat_session = session.get(ChatSessionModel, session_id)
+            statement = select(ChatSessionModel).where(
+                ChatSessionModel.id == session_id
+            )
+            if user_id is not None:
+                statement = statement.where(
+                    ChatSessionModel.user_id == user_id
+                )
+            chat_session = session.scalar(statement)
             if chat_session is None:
                 return None
             messages = list(
@@ -786,9 +956,18 @@ class DocumentStore:
                 ],
             }
 
-    def delete_chat_session(self, session_id: str) -> bool:
+    def delete_chat_session(
+        self, session_id: str, *, user_id: str | None = None
+    ) -> bool:
         with self.database.session() as session:
-            chat_session = session.get(ChatSessionModel, session_id)
+            statement = select(ChatSessionModel).where(
+                ChatSessionModel.id == session_id
+            )
+            if user_id is not None:
+                statement = statement.where(
+                    ChatSessionModel.user_id == user_id
+                )
+            chat_session = session.scalar(statement)
             if chat_session is None:
                 return False
             session.delete(chat_session)

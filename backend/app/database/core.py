@@ -53,6 +53,32 @@ class Database:
         inspector = inspect(self.engine)
         table_names = set(inspector.get_table_names())
         with self.engine.begin() as connection:
+            owner_tables = (
+                "study_sessions",
+                "documents",
+                "chat_sessions",
+                "model_runs",
+            )
+            for table_name in owner_tables:
+                if table_name not in table_names:
+                    continue
+                columns = {
+                    column["name"]
+                    for column in inspector.get_columns(table_name)
+                }
+                if "user_id" not in columns:
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE {table_name} "
+                            "ADD COLUMN user_id VARCHAR(64)"
+                        )
+                    )
+                connection.execute(
+                    text(
+                        f"CREATE INDEX IF NOT EXISTS "
+                        f"ix_{table_name}_user_id ON {table_name} (user_id)"
+                    )
+                )
             if "documents" in table_names:
                 columns = {column["name"] for column in inspector.get_columns("documents")}
                 if "study_session_id" not in columns:

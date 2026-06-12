@@ -88,6 +88,17 @@ export type SystemStatus = {
   database: string;
 };
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  display_name: string;
+};
+
+type AuthResponse = {
+  user: AuthUser;
+  csrf_token: string;
+};
+
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
 const API_BASE_URL = configuredApiBaseUrl
   ? (
@@ -98,11 +109,21 @@ const API_BASE_URL = configuredApiBaseUrl
     ).replace(/\/$/, "")
   : "http://127.0.0.1:8000";
 
+let csrfToken = "";
+
+export function setCsrfToken(value: string) {
+  csrfToken = value;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const mutation = !["GET", "HEAD", "OPTIONS"].includes(method);
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(mutation && csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
       ...init?.headers,
     },
   });
@@ -117,6 +138,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("studyos-auth-required"));
+    }
     const detail = payload?.detail;
     const message =
       typeof detail === "string"
@@ -125,6 +149,46 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
   return payload as T;
+}
+
+export async function getCurrentUser(): Promise<AuthUser> {
+  const response = await request<AuthResponse>("/api/auth/me");
+  setCsrfToken(response.csrf_token);
+  return response.user;
+}
+
+export async function login(
+  email: string,
+  password: string,
+): Promise<AuthUser> {
+  const response = await request<AuthResponse>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+  setCsrfToken(response.csrf_token);
+  return response.user;
+}
+
+export async function register(
+  displayName: string,
+  email: string,
+  password: string,
+): Promise<AuthUser> {
+  const response = await request<AuthResponse>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      display_name: displayName,
+      email,
+      password,
+    }),
+  });
+  setCsrfToken(response.csrf_token);
+  return response.user;
+}
+
+export async function logout(): Promise<void> {
+  await request<void>("/api/auth/logout", { method: "POST" });
+  setCsrfToken("");
 }
 
 export async function getDocuments(
@@ -151,6 +215,8 @@ export async function uploadDocument(
   const response = await fetch(`${API_BASE_URL}/api/documents/upload`, {
     method: "POST",
     body: form,
+    credentials: "include",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
   });
   const payload = await response.json();
   if (!response.ok) {
