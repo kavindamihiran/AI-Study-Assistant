@@ -20,6 +20,7 @@ dist/
 build/
 
 # Backend runtime and installer artifacts
+backend/data/
 backend/.tmp/
 backend/.tmp-api/
 backend/tests/.tmp/
