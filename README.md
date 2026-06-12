@@ -262,6 +262,23 @@ The included `render.yaml` deploys:
 - FastAPI as a Render Python web service
 - persistent application data through an external PostgreSQL `DATABASE_URL`
 
+The Blueprint uses Render `fromService` references to connect the two services:
+
+```text
+Backend FRONTEND_URL             <- frontend service hostname
+Frontend NEXT_PUBLIC_API_BASE_URL <- backend service hostname
+```
+
+The application converts these hostnames to HTTPS automatically. Public Render
+URLs therefore do not need to be hard-coded or committed.
+
+Before a new deployment, give both services unique non-personal names in
+`render.yaml` and update the matching `fromService.name` references. Existing
+Render services should either keep their current names with URLs configured
+manually, or be replaced by a fresh Blueprint deployment. Changing a service
+name in the YAML can create another service instead of renaming the existing
+one.
+
 The recommended $0 setup uses Neon PostgreSQL. Supabase PostgreSQL can be used
 by replacing only `DATABASE_URL`.
 

@@ -62,6 +62,43 @@ required tables during its first startup.
 
 ## 3. Deploy Both Render Services
 
+### Choose Unique Service Names
+
+Before creating the Blueprint, open `render.yaml` and choose service names that
+are available on Render. Keep the names generic and add a random suffix:
+
+```yaml
+services:
+  - type: web
+    name: studyos-api-your-suffix
+    # ...
+    envVars:
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: studyos-web-your-suffix
+          property: host
+
+  - type: web
+    name: studyos-web-your-suffix
+    # ...
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: studyos-api-your-suffix
+          property: host
+```
+
+Replace `your-suffix` with a non-personal value such as `a8f3c2`. Each service
+name and its matching `fromService.name` must be identical.
+
+`property: host` supplies a hostname without a protocol. The frontend and
+backend automatically convert that value to an HTTPS URL, so no public Render
+URL needs to be committed to the repository.
+
+### Create The Blueprint
+
 1. Create an account at <https://render.com/> and connect the GitHub account.
 2. In the Render dashboard, select **New > Blueprint**.
 3. Select this repository. Render detects the root `render.yaml`.
@@ -83,6 +120,24 @@ If Render reports that either service name is unavailable, change that service
 name in `render.yaml` and update the matching `name` in the other service's
 `fromService` reference.
 
+### Existing Render Services
+
+Changing names in `render.yaml` does not safely rename services that were
+already created under different names. It can cause Render to propose creating
+additional services.
+
+For an existing deployment, choose one approach:
+
+1. Keep the existing services and set their environment variables manually:
+   - Backend `FRONTEND_URL` = the complete HTTPS frontend URL
+   - Frontend `NEXT_PUBLIC_API_BASE_URL` = the complete HTTPS API URL
+2. Or suspend/delete the old Render services and create a fresh Blueprint from
+   the updated `render.yaml`.
+
+After changing either environment variable, redeploy the affected service. The
+frontend variable is embedded during `npm run build`, so the frontend must be
+rebuilt rather than only restarted.
+
 ## 4. Verify The Deployment
 
 Open these URLs in order:
@@ -94,6 +149,13 @@ Open these URLs in order:
 `/health` should return `{"status":"ok"}`. `/ready` should report that AI and
 data are ready. Then create a subject session, upload a small PDF, ask a
 question, refresh the page, and confirm the session and conversation remain.
+
+If the frontend opens but API requests fail:
+
+1. Check the frontend `NEXT_PUBLIC_API_BASE_URL`.
+2. Check the backend `FRONTEND_URL`.
+3. Confirm both values point to the current services.
+4. Redeploy the backend and rebuild the frontend.
 
 ## Free-Tier Behavior
 
