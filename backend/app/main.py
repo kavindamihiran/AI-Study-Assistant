@@ -72,13 +72,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.database = database
     app.state.document_store = document_store
     app.state.max_upload_bytes = settings.max_upload_mb * 1024 * 1024
+    frontend_url = settings.frontend_url.rstrip("/")
+    if frontend_url and not frontend_url.startswith(("http://", "https://")):
+        frontend_url = f"https://{frontend_url}"
     allowed_origins = {
-        settings.frontend_url.rstrip("/"),
+        frontend_url,
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:3200",
         "http://127.0.0.1:3200",
     }
+    allowed_origins.discard("")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=sorted(allowed_origins),

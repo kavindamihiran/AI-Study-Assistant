@@ -88,8 +88,15 @@ export type SystemStatus = {
   database: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const API_BASE_URL = configuredApiBaseUrl
+  ? (
+      configuredApiBaseUrl.startsWith("http://") ||
+      configuredApiBaseUrl.startsWith("https://")
+        ? configuredApiBaseUrl
+        : `https://${configuredApiBaseUrl}`
+    ).replace(/\/$/, "")
+  : "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
