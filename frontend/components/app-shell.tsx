@@ -4,7 +4,9 @@ import {
   Activity,
   ChevronDown,
   CircleHelp,
+  FileText,
   GraduationCap,
+  History,
   LayoutDashboard,
   Library,
   Menu,
@@ -19,10 +21,19 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useChatWorkspace } from "@/components/chat-provider";
 import { useStudyJobs } from "@/components/study-job-provider";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
+import {
+  ChatSessionSummary,
+  DocumentRecord,
+  ModelProfile,
+  getActiveProfile,
+  getChatSession,
+  getChatSessions,
+  getDocuments,
+} from "@/lib/api";
 
 const workspaceItems = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
@@ -71,8 +82,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(
     null,
   );
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchDocuments, setSearchDocuments] = useState<DocumentRecord[]>([]);
+  const [searchSessions, setSearchSessions] = useState<ChatSessionSummary[]>([]);
+  const [activeProfile, setActiveProfile] = useState<ModelProfile | null>(null);
+  const [shellError, setShellError] = useState("");
   const router = useRouter();
-  const { startNewSession } = useChatWorkspace();
+  const { loadSession, startNewSession } = useChatWorkspace();
   const { clearJobs } = useStudyJobs();
   const {
     activeWorkspace,
@@ -82,6 +101,60 @@ export function AppShell({ children }: { children: ReactNode }) {
     workspaces,
   } = useStudyWorkspace();
   const closeNav = () => setMobileNav(false);
+  const allNavigationItems = useMemo(
+    () => [...workspaceItems, ...manageItems],
+    [],
+  );
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredNavigationItems = allNavigationItems.filter((item) =>
+    item.label.toLowerCase().includes(normalizedSearch),
+  );
+  const filteredDocuments = searchDocuments.filter((document) =>
+    `${document.title} ${document.filename}`.toLowerCase().includes(
+      normalizedSearch,
+    ),
+  );
+  const filteredSessions = searchSessions.filter((session) =>
+    session.title.toLowerCase().includes(normalizedSearch),
+  );
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setHelpOpen(false);
+        setProfileOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!activeWorkspace || (!searchOpen && !profileOpen)) return;
+    void Promise.all([
+      getDocuments(activeWorkspace.id),
+      getChatSessions(activeWorkspace.id),
+      getActiveProfile(),
+    ])
+      .then(([documents, chatSessions, profile]) => {
+        setSearchDocuments(documents);
+        setSearchSessions(chatSessions);
+        setActiveProfile(profile);
+        setShellError("");
+      })
+      .catch((error) => {
+        setShellError(
+          error instanceof Error
+            ? error.message
+            : "Could not load workspace details.",
+        );
+      });
+  }, [activeWorkspace?.id, profileOpen, searchOpen]);
 
   async function newStudySession() {
     await createWorkspace(`Study session ${workspaces.length + 1}`);
@@ -108,6 +181,42 @@ export function AppShell({ children }: { children: ReactNode }) {
     } finally {
       setDeletingWorkspaceId(null);
     }
+  }
+
+  function openSearch() {
+    setSearchOpen(true);
+    setProfileOpen(false);
+    setHelpOpen(false);
+  }
+
+  function openHelp() {
+    setHelpOpen(true);
+    setProfileOpen(false);
+    setSearchOpen(false);
+  }
+
+  function toggleProfile() {
+    setProfileOpen((current) => !current);
+    setHelpOpen(false);
+    setSearchOpen(false);
+  }
+
+  function closePanels() {
+    setSearchOpen(false);
+    setHelpOpen(false);
+    setProfileOpen(false);
+  }
+
+  function goTo(href: string) {
+    closePanels();
+    closeNav();
+    router.push(href);
+  }
+
+  async function openChatSession(sessionIdToOpen: string) {
+    const saved = await getChatSession(sessionIdToOpen);
+    loadSession(saved);
+    goTo("/chat");
   }
 
   return (
@@ -253,20 +362,32 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu size={18} />
             </button>
-            <div className="hidden items-center gap-2 rounded-xl border border-[#dce3de] bg-white px-3 py-2.5 text-sm text-[#6e7c75] shadow-sm sm:flex sm:w-[280px]">
+            <button
+              onClick={openSearch}
+              className="hidden items-center gap-2 rounded-xl border border-[#dce3de] bg-white px-3 py-2.5 text-left text-sm text-[#6e7c75] shadow-sm transition hover:border-[#b8c8bf] hover:text-[#263b30] sm:flex sm:w-[280px]"
+              aria-label="Search your workspace"
+            >
               <Search size={16} />
               <span>Search your workspace</span>
               <span className="ml-auto rounded-md bg-[#f0f3f1] px-1.5 py-0.5 text-[10px]">
                 Ctrl K
               </span>
-            </div>
+            </button>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="grid size-9 place-items-center rounded-full border border-[#dce3de] bg-white text-[#65736c]">
+          <div className="relative flex items-center gap-3">
+            <button
+              onClick={openHelp}
+              className="grid size-9 place-items-center rounded-full border border-[#dce3de] bg-white text-[#65736c] transition hover:border-[#b8c8bf] hover:text-[#263b30]"
+              aria-label="Open help"
+            >
               <CircleHelp size={17} />
             </button>
             <div className="h-7 w-px bg-[#dce3de]" />
-            <div className="flex items-center gap-2">
+            <button
+              onClick={toggleProfile}
+              className="flex items-center gap-2 rounded-2xl px-1.5 py-1 transition hover:bg-white"
+              aria-label="Open profile menu"
+            >
               <div className="grid size-9 place-items-center rounded-full bg-[#dce8ff] text-xs font-bold text-[#315baa]">
                 KS
               </div>
@@ -275,14 +396,218 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <p className="text-[10px] text-[#849089]">Student workspace</p>
               </div>
               <ChevronDown size={14} className="text-[#7d8982]" />
-            </div>
+            </button>
+            {profileOpen && (
+              <div className="absolute right-0 top-12 z-50 w-[290px] rounded-3xl border border-[#dfe5e1] bg-white p-4 shadow-[0_24px_70px_rgba(21,43,31,0.18)]">
+                <div className="flex items-center gap-3">
+                  <div className="grid size-11 place-items-center rounded-full bg-[#dce8ff] text-sm font-bold text-[#315baa]">
+                    KS
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Kavinda</p>
+                    <p className="text-xs text-[#7c8982]">Student workspace</p>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-2xl bg-[#f7f9f7] p-3 text-xs leading-5 text-[#65736c]">
+                  <p>
+                    <span className="font-semibold text-[#263b30]">Session:</span>{" "}
+                    {activeWorkspace?.title ?? "Loading..."}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#263b30]">Model:</span>{" "}
+                    {activeProfile?.display_name ?? "Loading..."}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#263b30]">Docs:</span>{" "}
+                    {searchDocuments.length} in this session
+                  </p>
+                </div>
+                {shellError && (
+                  <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+                    {shellError}
+                  </p>
+                )}
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => goTo("/documents")}
+                    className="rounded-xl border border-[#dfe5e1] px-3 py-2 text-xs font-semibold hover:bg-[#f7f9f7]"
+                  >
+                    Documents
+                  </button>
+                  <button
+                    onClick={() => goTo("/settings")}
+                    className="rounded-xl border border-[#dfe5e1] px-3 py-2 text-xs font-semibold hover:bg-[#f7f9f7]"
+                  >
+                    Settings
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </header>
         <div className="mx-auto max-w-[1450px] px-5 py-8 md:px-8 lg:px-10">
           {children}
         </div>
       </section>
+      {searchOpen && (
+        <div className="fixed inset-0 z-[70] bg-[#10251c]/35 p-4 backdrop-blur-sm">
+          <div className="mx-auto mt-12 max-w-2xl overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-[0_24px_80px_rgba(21,43,31,0.22)]">
+            <div className="flex items-center gap-3 border-b border-[#e2e7e4] px-5 py-4">
+              <Search size={18} className="text-[#66806f]" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search pages, documents, or saved chats..."
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              />
+              <button
+                onClick={closePanels}
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-[#7c8982] hover:bg-[#f3f6f3]"
+              >
+                Esc
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-y-auto p-4">
+              {shellError && (
+                <p className="mb-3 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+                  {shellError}
+                </p>
+              )}
+              <SearchSection title="Pages">
+                {filteredNavigationItems.map((item) => (
+                  <button
+                    key={item.href}
+                    onClick={() => goTo(item.href)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm hover:bg-[#f7f9f7]"
+                  >
+                    <item.icon size={16} className="text-[#66806f]" />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </SearchSection>
+              <SearchSection title="Documents">
+                {!filteredDocuments.length && (
+                  <p className="px-3 py-2 text-xs text-[#89948e]">
+                    No matching documents in this session.
+                  </p>
+                )}
+                {filteredDocuments.slice(0, 8).map((document) => (
+                  <button
+                    key={document.id}
+                    onClick={() => goTo("/documents")}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left hover:bg-[#f7f9f7]"
+                  >
+                    <FileText size={16} className="shrink-0 text-[#66806f]" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">
+                        {document.filename}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-[#89948e]">
+                        {document.chunk_count} chunks · {document.status}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </SearchSection>
+              <SearchSection title="Saved Chats">
+                {!filteredSessions.length && (
+                  <p className="px-3 py-2 text-xs text-[#89948e]">
+                    No matching chats in this session.
+                  </p>
+                )}
+                {filteredSessions.slice(0, 8).map((session) => (
+                  <button
+                    key={session.id}
+                    onClick={() => void openChatSession(session.id)}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left hover:bg-[#f7f9f7]"
+                  >
+                    <History size={16} className="shrink-0 text-[#66806f]" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">
+                        {session.title}
+                      </span>
+                      <span className="mt-0.5 block text-[10px] text-[#89948e]">
+                        {session.active_model_profile_id ?? "saved chat"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </SearchSection>
+            </div>
+          </div>
+        </div>
+      )}
+      {helpOpen && (
+        <div className="fixed inset-0 z-[70] bg-[#10251c]/35 p-4 backdrop-blur-sm">
+          <div className="mx-auto mt-16 max-w-lg rounded-3xl border border-[#dfe5e1] bg-white p-6 shadow-[0_24px_80px_rgba(21,43,31,0.22)]">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#66806f]">
+                  Help
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
+                  How StudyOS works
+                </h2>
+              </div>
+              <button
+                onClick={closePanels}
+                className="rounded-xl border border-[#dfe5e1] p-2 text-[#65736c] hover:bg-[#f7f9f7]"
+                aria-label="Close help"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="mt-5 space-y-3 text-sm leading-6 text-[#65736c]">
+              <p>
+                Use subject sessions to keep each module separate. Upload PDFs
+                or notes inside the active session, then chat or generate study
+                material from those documents.
+              </p>
+              <p>
+                Press <span className="font-semibold text-[#263b30]">Ctrl K</span>{" "}
+                to search pages, uploaded documents, and saved chats.
+              </p>
+              <p>
+                Chat and study-tool jobs keep processing while you move between
+                pages.
+              </p>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => goTo("/documents")}
+                className="rounded-xl bg-[#173a29] px-4 py-3 text-xs font-semibold text-white"
+              >
+                Upload docs
+              </button>
+              <button
+                onClick={() => goTo("/study-tools")}
+                className="rounded-xl border border-[#dfe5e1] px-4 py-3 text-xs font-semibold"
+              >
+                Study tools
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function SearchSection({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <section className="mb-4 last:mb-0">
+      <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8a958f]">
+        {title}
+      </p>
+      <div>{children}</div>
+    </section>
   );
 }
 
