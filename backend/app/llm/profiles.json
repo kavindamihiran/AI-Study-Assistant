@@ -1,0 +1,131 @@
+[
+  {
+    "profile_id": "nvidia_deepseek_v4_flash",
+    "display_name": "DeepSeek V4 Flash",
+    "provider_name": "nvidia_nim",
+    "base_url": "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}",
+    "model_id": "${NVIDIA_DEEPSEEK_V4_FLASH_MODEL_ID}",
+    "api_key_env_name": "NVIDIA_API_KEY",
+    "defaults": {"temperature": 0.2, "top_p": 0.95, "max_tokens": 4096},
+    "max_context_tokens": 131072,
+    "capabilities": {
+      "streaming": true,
+      "json_mode": false,
+      "tool_calling": false,
+      "reasoning_mode": true,
+      "vision": false,
+      "system_message": true,
+      "structured_output": false
+    },
+    "allowed_extra_body_fields": [],
+    "disallowed_request_fields": ["response_format", "tools", "tool_choice"],
+    "output_parser_type": "openai_compatible",
+    "prompt_style": "reasoning",
+    "fallback_model_profile_id": "nvidia_nemotron_default",
+    "enabled": true
+  },
+  {
+    "profile_id": "nvidia_deepseek_v4_pro",
+    "display_name": "DeepSeek V4 Pro",
+    "provider_name": "nvidia_nim",
+    "base_url": "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}",
+    "model_id": "${NVIDIA_DEEPSEEK_V4_PRO_MODEL_ID}",
+    "api_key_env_name": "NVIDIA_API_KEY",
+    "defaults": {"temperature": 0.2, "top_p": 0.95, "max_tokens": 4096},
+    "max_context_tokens": 131072,
+    "capabilities": {
+      "streaming": true,
+      "json_mode": false,
+      "tool_calling": false,
+      "reasoning_mode": true,
+      "vision": false,
+      "system_message": true,
+      "structured_output": false
+    },
+    "allowed_extra_body_fields": [],
+    "disallowed_request_fields": ["response_format", "tools", "tool_choice"],
+    "output_parser_type": "openai_compatible",
+    "prompt_style": "reasoning",
+    "fallback_model_profile_id": "nvidia_nemotron_default",
+    "enabled": true
+  },
+  {
+    "profile_id": "nvidia_glm_5_1",
+    "display_name": "GLM 5.1",
+    "provider_name": "nvidia_nim",
+    "base_url": "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}",
+    "model_id": "${NVIDIA_GLM_5_1_MODEL_ID}",
+    "api_key_env_name": "NVIDIA_API_KEY",
+    "defaults": {"temperature": 0.2, "top_p": 0.95, "max_tokens": 4096},
+    "max_context_tokens": 131072,
+    "capabilities": {
+      "streaming": true,
+      "json_mode": false,
+      "tool_calling": false,
+      "reasoning_mode": false,
+      "vision": false,
+      "system_message": true,
+      "structured_output": false
+    },
+    "allowed_extra_body_fields": [],
+    "disallowed_request_fields": ["response_format", "tools", "tool_choice"],
+    "output_parser_type": "openai_compatible",
+    "prompt_style": "default",
+    "fallback_model_profile_id": "nvidia_nemotron_default",
+    "enabled": true
+  },
+  {
+    "profile_id": "nvidia_kimi_k2_6",
+    "display_name": "Kimi K2.6",
+    "provider_name": "nvidia_nim",
+    "base_url": "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}",
+    "model_id": "${NVIDIA_KIMI_K2_6_MODEL_ID}",
+    "api_key_env_name": "NVIDIA_API_KEY",
+    "defaults": {"temperature": 0.2, "top_p": 0.95, "max_tokens": 4096},
+    "max_context_tokens": 131072,
+    "capabilities": {
+      "streaming": true,
+      "json_mode": false,
+      "tool_calling": false,
+      "reasoning_mode": false,
+      "vision": false,
+      "system_message": true,
+      "structured_output": false
+    },
+    "allowed_extra_body_fields": [],
+    "disallowed_request_fields": ["response_format", "tools", "tool_choice"],
+    "output_parser_type": "openai_compatible",
+    "prompt_style": "long_context",
+    "fallback_model_profile_id": "nvidia_nemotron_default",
+    "enabled": true
+  },
+  {
+    "profile_id": "nvidia_nemotron_default",
+    "display_name": "Default NIM Chat Model",
+    "provider_name": "nvidia_nim",
+    "base_url": "${NVIDIA_BASE_URL:-https://integrate.api.nvidia.com/v1}",
+    "model_id": "${NVIDIA_DEFAULT_MODEL_ID}",
+    "api_key_env_name": "NVIDIA_API_KEY",
+    "defaults": {"temperature": 0.2, "top_p": 0.95, "max_tokens": 2048},
+    "max_context_tokens": 32768,
+    "capabilities": {
+      "streaming": true,
+      "json_mode": false,
+      "tool_calling": false,
+      "reasoning_mode": false,
+      "vision": false,
+      "system_message": true,
+      "structured_output": false
+    },
+    "allowed_extra_body_fields": [],
+    "disallowed_request_fields": [
+      "response_format",
+      "tools",
+      "tool_choice",
+      "parallel_tool_calls"
+    ],
+    "output_parser_type": "openai_compatible",
+    "prompt_style": "minimal",
+    "enabled": true
+  }
+]

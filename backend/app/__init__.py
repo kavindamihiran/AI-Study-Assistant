@@ -1,0 +1,2 @@
+"""AI Study Assistant backend."""
+
