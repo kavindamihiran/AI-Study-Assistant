@@ -83,7 +83,7 @@ function readTable(lines: string[], start: number): { table: TableBlock; next: n
 
 function renderTable(table: TableBlock, key: number) {
   return (
-    <div key={key} className="my-4 overflow-x-auto rounded-2xl border border-[#dfe8e2] bg-white">
+    <div key={key} className="my-4 max-w-full overflow-x-auto rounded-2xl border border-[#dfe8e2] bg-white">
       <table className="w-full border-collapse text-left text-sm">
         <thead className="bg-[#f0f6ed] text-[#263b30]">
           <tr>
@@ -236,5 +236,9 @@ export function MarkdownText({
     );
   }
 
-  return <div className={className}>{blocks}</div>;
+  return (
+    <div className={`min-w-0 max-w-full break-words [overflow-wrap:anywhere] ${className}`}>
+      {blocks}
+    </div>
+  );
 }

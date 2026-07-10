@@ -130,13 +130,13 @@ export default function ChatPage() {
         }
       />
       <StudyFlow current="learn" hasSources={documents.length > 0} />
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]">
-        <section className="flex min-h-[560px] flex-col overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-sm sm:min-h-[620px]">
-          <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 md:p-7">
+      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="flex min-h-[560px] min-w-0 max-w-full flex-col overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-sm sm:min-h-[620px]">
+          <div className="min-w-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 md:p-7">
             {messages.map((message, index) => (
               <div
                 key={message.id}
-                className={`flex gap-3 ${message.role === "user" ? "justify-end" : ""}`}
+                className={`flex min-w-0 gap-3 ${message.role === "user" ? "justify-end" : ""}`}
               >
                 {message.role === "assistant" && (
                   <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#173a29] text-[#c8f169]">
@@ -144,7 +144,7 @@ export default function ChatPage() {
                   </div>
                 )}
                 <div
-                  className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${
+                  className={`min-w-0 max-w-[calc(100%-3rem)] break-words rounded-2xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere] sm:max-w-[82%] ${
                     message.role === "user"
                       ? "bg-[#173a29] text-white"
                       : "border border-[#e2e7e4] bg-[#f8faf8] text-[#304038]"
@@ -194,7 +194,7 @@ export default function ChatPage() {
               </div>
             ))}
             {messages.length === 1 && documents.length > 0 && (
-              <div className="ml-12 rounded-2xl border border-[#e2e7e4] bg-white p-4 sm:ml-12">
+              <div className="min-w-0 rounded-2xl border border-[#e2e7e4] bg-white p-4 sm:ml-12">
                 <p className="text-xs font-semibold text-[#405048]">
                   Try a useful first question
                 </p>
@@ -210,7 +210,7 @@ export default function ChatPage() {
                         setInput(prompt);
                         inputRef.current?.focus();
                       }}
-                      className="rounded-xl border border-[#dce3de] bg-[#f8faf8] px-3 py-2 text-left text-xs font-medium text-[#526159] transition hover:border-[#9ab68d] hover:bg-[#f2f8ed]"
+                      className="w-full min-w-0 whitespace-normal break-words rounded-xl border border-[#dce3de] bg-[#f8faf8] px-3 py-2 text-left text-xs font-medium text-[#526159] transition hover:border-[#9ab68d] hover:bg-[#f2f8ed] sm:w-auto"
                     >
                       {prompt}
                     </button>
@@ -237,7 +237,7 @@ export default function ChatPage() {
                     : "Upload a document first..."
                 }
                 disabled={!documents.length}
-                className="min-h-12 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none disabled:cursor-not-allowed"
+                className="min-h-12 min-w-0 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none disabled:cursor-not-allowed"
               />
               <button
                 onClick={handleSendMessage}
@@ -271,7 +271,7 @@ export default function ChatPage() {
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <div className="rounded-2xl border border-[#dfe5e1] bg-white p-5">
             <History size={18} className="text-[#648b47]" />
             <div className="mt-3 flex items-center justify-between gap-3">

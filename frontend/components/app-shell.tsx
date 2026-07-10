@@ -363,7 +363,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <section className="pb-24 lg:pb-0 lg:pl-[290px]">
+      <section className="min-w-0 max-w-full pb-24 lg:pb-0 lg:pl-[290px]">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#dfe5e1] bg-[#f5f7f6]/90 px-5 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             <button
@@ -461,7 +461,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
-        <div className="mx-auto max-w-[1450px] px-4 py-6 sm:px-5 md:px-8 md:py-8 lg:px-10">
+        <div className="mx-auto w-full min-w-0 max-w-[1450px] px-4 py-6 sm:px-5 md:px-8 md:py-8 lg:px-10">
           {children}
         </div>
       </section>
@@ -659,14 +659,14 @@ export function PageHeading({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-      <div>
+    <div className="flex min-w-0 max-w-full flex-col justify-between gap-5 md:flex-row md:items-end">
+      <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-[#66806f]">
           <span>Workspace</span>
           <span>/</span>
           <span className="text-[#263b30]">{section}</span>
         </div>
-        <h1 className="text-3xl font-semibold tracking-[-0.035em] md:text-[38px]">
+        <h1 className="break-words text-3xl font-semibold tracking-[-0.035em] md:text-[38px]">
           {title}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f7d76]">
