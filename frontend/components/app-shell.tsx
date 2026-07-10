@@ -45,6 +45,13 @@ const manageItems = [
   { label: "Settings", href: "/settings", icon: Settings2 },
 ];
 
+const mobileItems = [
+  { label: "Home", href: "/", icon: LayoutDashboard },
+  { label: "Sources", href: "/documents", icon: Library },
+  { label: "Chat", href: "/chat", icon: MessageSquareText },
+  { label: "Tools", href: "/study-tools", icon: WandSparkles },
+];
+
 function NavLink({
   href,
   label,
@@ -75,6 +82,7 @@ function NavLink({
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [mobileNav, setMobileNav] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(true);
   const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(
@@ -355,7 +363,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <section className="lg:pl-[290px]">
+      <section className="pb-24 lg:pb-0 lg:pl-[290px]">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-[#dfe5e1] bg-[#f5f7f6]/90 px-5 backdrop-blur-xl md:px-8">
           <div className="flex items-center gap-3">
             <button
@@ -453,10 +461,30 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </header>
-        <div className="mx-auto max-w-[1450px] px-5 py-8 md:px-8 lg:px-10">
+        <div className="mx-auto max-w-[1450px] px-4 py-6 sm:px-5 md:px-8 md:py-8 lg:px-10">
           {children}
         </div>
       </section>
+      <nav
+        aria-label="Mobile navigation"
+        className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-4 rounded-2xl border border-white/10 bg-[#10251c]/95 p-1.5 text-white shadow-[0_16px_50px_rgba(16,37,28,0.28)] backdrop-blur-xl lg:hidden"
+      >
+        {mobileItems.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-medium transition ${
+                active ? "bg-white/10 text-[#c8f169]" : "text-white/55"
+              }`}
+            >
+              <item.icon size={17} />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
       {searchOpen && (
         <div className="fixed inset-0 z-[70] bg-[#10251c]/35 p-4 backdrop-blur-sm">
           <div className="mx-auto mt-12 max-w-2xl overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-[0_24px_80px_rgba(21,43,31,0.22)]">
