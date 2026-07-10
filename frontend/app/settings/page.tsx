@@ -37,8 +37,8 @@ export default function SettingsPage() {
         title="Workspace settings"
         description="Review your current study session and production workspace status."
       />
-      <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_340px]">
-        <section className="rounded-3xl border border-[#dfe5e1] bg-white p-6">
+      <div className="mt-7 grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="min-w-0 rounded-3xl border border-[#dfe5e1] bg-white p-5 sm:p-6">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-xl bg-[#edf5e6] text-[#56843f]">
               <LockKeyhole size={18} />
@@ -73,7 +73,7 @@ export default function SettingsPage() {
           </button>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           {[
             {
               icon: Check,

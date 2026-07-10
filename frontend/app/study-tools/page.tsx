@@ -118,8 +118,8 @@ export default function StudyToolsPage() {
         description={`Your sources from ${activeWorkspace?.title ?? "this study session"} are ready. Pick an activity and make it your own.`}
       />
       <StudyFlow current="activity" hasSources={documents.length > 0} />
-      <div className="mt-5 grid gap-5 xl:grid-cols-[320px_1fr]">
-        <div className="space-y-6">
+      <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-6">
           <section className="rounded-3xl border border-[#dfe5e1] bg-white p-4">
             <p className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7c8982]">
               Choose a tool
@@ -209,7 +209,7 @@ export default function StudyToolsPage() {
                       >
                         {selected ? <Check size={14} /> : <FileText size={14} />}
                       </span>
-                      <span className="min-w-0">
+                      <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">
                           {document.filename}
                         </span>
@@ -256,7 +256,7 @@ export default function StudyToolsPage() {
             </section>
           )}
         </div>
-        <section className="rounded-3xl border border-[#dfe5e1] bg-white p-4 sm:p-6">
+        <section className="min-w-0 max-w-full rounded-3xl border border-[#dfe5e1] bg-white p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">{activeTool.label} generator</h2>
@@ -299,7 +299,7 @@ export default function StudyToolsPage() {
               {error}
             </p>
           )}
-          <div className="mt-6 min-h-64 rounded-2xl border border-[#e2e7e4] bg-[#f8faf8] p-5">
+          <div className="mt-6 min-h-64 min-w-0 max-w-full overflow-hidden rounded-2xl border border-[#e2e7e4] bg-[#f8faf8] p-4 sm:p-5">
             {selectedJob ? (
               <StudyJobOutput job={selectedJob} />
             ) : (
@@ -362,7 +362,7 @@ function StudyOutput({
   const items = output.data?.items ?? [];
 
   return (
-    <div>
+    <div className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
       {(tool === "summary" || tool === "plan") && (
         <MarkdownText text={output.text} />
       )}
