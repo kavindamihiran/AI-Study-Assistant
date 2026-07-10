@@ -220,7 +220,7 @@ export default function DocumentsPage() {
                   Material ready
                 </p>
                 <h2 className="mt-1 text-xl font-semibold tracking-tight">
-                  Great—what do you want to do next?
+                  Great, what do you want to do next?
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-white/55">
                   Your new {recentDocumentIds.length === 1 ? "document is" : "documents are"} indexed and already selected for the next step.
