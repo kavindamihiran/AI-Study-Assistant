@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRight,
   Bot,
   FileText,
   History,
@@ -10,11 +11,13 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { useChatWorkspace } from "@/components/chat-provider";
 import { MarkdownText } from "@/components/markdown-text";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
+import { StudyFlow } from "@/components/study-flow";
 import {
   DocumentRecord,
   ChatSessionSummary,
@@ -28,6 +31,7 @@ export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const {
     clearMessages,
     initializeDocumentSelection,
@@ -45,16 +49,37 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeWorkspace) return;
     void getDocuments(activeWorkspace.id)
-      .then((indexedDocuments) => {
+      .then((uploadedDocuments) => {
+        const indexedDocuments = uploadedDocuments.filter(
+          (document) => document.status === "indexed",
+        );
         setDocuments(indexedDocuments);
-        if (!sourceSelectionInitialized && indexedDocuments.length) {
+        const requestedIds = new URLSearchParams(window.location.search)
+          .get("sources")
+          ?.split(",")
+          .filter((id) => indexedDocuments.some((document) => document.id === id));
+        if (requestedIds?.length) {
+          setSelectedDocumentIds(requestedIds);
+          window.setTimeout(() => inputRef.current?.focus(), 50);
+        } else if (
+          indexedDocuments.length &&
+          (!sourceSelectionInitialized ||
+            !selectedDocumentIds.some((id) =>
+              indexedDocuments.some((document) => document.id === id),
+            ))
+        ) {
           initializeDocumentSelection(indexedDocuments.map((document) => document.id));
         }
       })
       .catch(() => {
         setDocuments([]);
       });
-  }, [activeWorkspace?.id, initializeDocumentSelection, sourceSelectionInitialized]);
+  }, [
+    activeWorkspace?.id,
+    initializeDocumentSelection,
+    setSelectedDocumentIds,
+    sourceSelectionInitialized,
+  ]);
 
   async function refreshSessions() {
     setLoadingSessions(true);
@@ -104,9 +129,10 @@ export default function ChatPage() {
           </div>
         }
       />
-      <div className="mt-7 grid gap-6 xl:grid-cols-[1fr_320px]">
-        <section className="flex min-h-[620px] flex-col overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-sm">
-          <div className="flex-1 space-y-5 overflow-y-auto p-5 md:p-7">
+      <StudyFlow current="learn" hasSources={documents.length > 0} />
+      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_320px]">
+        <section className="flex min-h-[560px] flex-col overflow-hidden rounded-3xl border border-[#dfe5e1] bg-white shadow-sm sm:min-h-[620px]">
+          <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 md:p-7">
             {messages.map((message, index) => (
               <div
                 key={message.id}
@@ -167,10 +193,36 @@ export default function ChatPage() {
                 )}
               </div>
             ))}
+            {messages.length === 1 && documents.length > 0 && (
+              <div className="ml-12 rounded-2xl border border-[#e2e7e4] bg-white p-4 sm:ml-12">
+                <p className="text-xs font-semibold text-[#405048]">
+                  Try a useful first question
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  {[
+                    "Summarize the main ideas",
+                    "What should I remember for an exam?",
+                    "Explain the hardest concept simply",
+                  ].map((prompt) => (
+                    <button
+                      key={prompt}
+                      onClick={() => {
+                        setInput(prompt);
+                        inputRef.current?.focus();
+                      }}
+                      className="rounded-xl border border-[#dce3de] bg-[#f8faf8] px-3 py-2 text-left text-xs font-medium text-[#526159] transition hover:border-[#9ab68d] hover:bg-[#f2f8ed]"
+                    >
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="border-t border-[#e2e7e4] p-4">
             <div className="flex items-end gap-3 rounded-2xl border border-[#dce3de] bg-[#fafbfa] p-2 focus-within:border-[#91ad85] focus-within:ring-4 focus-within:ring-[#91ad85]/10">
               <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -201,7 +253,7 @@ export default function ChatPage() {
                 <Send size={17} />
               </button>
             </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-[#7c8982]">
+            <div className="mt-3 flex flex-col gap-2 text-xs text-[#7c8982] sm:flex-row sm:items-center sm:justify-between">
               <span>
                 {sending
                   ? "Processing continues if you visit another page."
@@ -275,9 +327,13 @@ export default function ChatPage() {
             </p>
             <div className="mt-3 space-y-2">
               {!documents.length && (
-                <p className="rounded-xl bg-[#f7f9f7] p-3 text-xs text-[#89948e]">
-                  No indexed documents yet.
-                </p>
+                <Link
+                  href="/documents"
+                  className="flex items-center justify-between rounded-xl bg-[#f1f8eb] p-3 text-xs font-semibold text-[#477238]"
+                >
+                  Upload your first document
+                  <ArrowRight size={14} />
+                </Link>
               )}
               {documents.map((document) => (
                 <label

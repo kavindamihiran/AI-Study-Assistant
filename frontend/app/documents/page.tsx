@@ -2,17 +2,23 @@
 
 import {
   AlertCircle,
+  ArrowRight,
+  Brain,
   CheckCircle2,
   File,
   FileText,
   LoaderCircle,
+  MessageSquareText,
   Plus,
   RotateCcw,
+  Sparkles,
   Trash2,
   UploadCloud,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
+import { StudyFlow } from "@/components/study-flow";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
@@ -41,6 +47,7 @@ export default function DocumentsPage() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [recentDocumentIds, setRecentDocumentIds] = useState<string[]>([]);
   const { activeWorkspace } = useStudyWorkspace();
 
   async function refreshDocuments() {
@@ -58,6 +65,9 @@ export default function DocumentsPage() {
   }
 
   useEffect(() => {
+    setLoading(true);
+    setDocuments([]);
+    setRecentDocumentIds([]);
     void refreshDocuments();
   }, [activeWorkspace?.id]);
 
@@ -78,6 +88,9 @@ export default function DocumentsPage() {
           document,
           ...current.filter((item) => item.id !== document.id),
         ]);
+        setRecentDocumentIds((current) =>
+          current.includes(document.id) ? current : [...current, document.id],
+        );
         setUploads((current) => current.filter((item) => item.id !== uploadId));
       } catch (error) {
         setUploads((current) =>
@@ -148,8 +161,8 @@ export default function DocumentsPage() {
     <AppShell>
       <PageHeading
         section="Documents"
-        title="Build this session library"
-        description={`Upload material for ${activeWorkspace?.title ?? "this study session"}. Each subject session keeps its own documents.`}
+        title="Add your study material"
+        description={`Start with notes from ${activeWorkspace?.title ?? "this study session"}, then choose exactly how you want to learn from them.`}
         action={
           <button
             onClick={() => inputRef.current?.click()}
@@ -160,6 +173,7 @@ export default function DocumentsPage() {
           </button>
         }
       />
+      <StudyFlow current="sources" hasSources={documents.length > 0} />
       <input
         ref={inputRef}
         type="file"
@@ -175,19 +189,71 @@ export default function DocumentsPage() {
           void addFiles(event.dataTransfer.files);
         }}
         onDragOver={(event) => event.preventDefault()}
-        className="mt-7 flex min-h-64 w-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-[#cbd6cf] bg-white p-8 text-center transition hover:border-[#84a177] hover:bg-[#fbfdf9]"
+        className={`mt-5 flex w-full flex-col items-center justify-center border-2 border-dashed border-[#cbd6cf] bg-white text-center transition hover:border-[#84a177] hover:bg-[#fbfdf9] ${
+          documents.length
+            ? "min-h-40 rounded-2xl p-5 sm:flex-row sm:gap-4 sm:text-left"
+            : "min-h-60 rounded-3xl p-8"
+        }`}
       >
         <div className="grid size-14 place-items-center rounded-2xl bg-[#edf5e6] text-[#56843f]">
           <UploadCloud size={24} />
         </div>
-        <h2 className="mt-4 text-base font-semibold">Drop study material here</h2>
-        <p className="mt-2 text-xs text-[#7c8982]">
-          PDF, TXT, Markdown, or DOCX · Up to 25 MB
-        </p>
+        <span>
+          <h2 className={`${documents.length ? "mt-3 sm:mt-0" : "mt-4"} text-base font-semibold`}>
+            {documents.length ? "Add more material" : "Drop study material here"}
+          </h2>
+          <p className="mt-2 text-xs text-[#7c8982]">
+            PDF, TXT, Markdown, or DOCX · Up to 25 MB
+          </p>
+        </span>
       </button>
 
-      <section className="mt-6 rounded-3xl border border-[#dfe5e1] bg-white p-6">
-        <div className="flex items-center justify-between">
+      {recentDocumentIds.length > 0 && uploads.every((item) => item.status !== "uploading") && (
+        <section className="mt-5 overflow-hidden rounded-3xl bg-[#173a29] text-white shadow-[0_18px_50px_rgba(23,58,41,0.16)]">
+          <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#c8f169] text-[#17321f]">
+                <CheckCircle2 size={19} />
+              </span>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#c8f169]">
+                  Material ready
+                </p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">
+                  Great—what do you want to do next?
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-white/55">
+                  Your new {recentDocumentIds.length === 1 ? "document is" : "documents are"} indexed and already selected for the next step.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-3">
+              <NextAction
+                href={`/chat?sources=${recentDocumentIds.join(",")}`}
+                icon={MessageSquareText}
+                title="Ask questions"
+                text="Chat with your notes"
+                primary
+              />
+              <NextAction
+                href={`/study-tools?tool=summary&sources=${recentDocumentIds.join(",")}`}
+                icon={Sparkles}
+                title="Make a summary"
+                text="Get the key ideas"
+              />
+              <NextAction
+                href={`/study-tools?tool=mcq&sources=${recentDocumentIds.join(",")}`}
+                icon={Brain}
+                title="Test myself"
+                text="Create practice MCQs"
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="mt-5 rounded-3xl border border-[#dfe5e1] bg-white p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Indexed documents</h2>
             <p className="mt-1 text-xs text-[#7c8982]">
@@ -208,7 +274,7 @@ export default function DocumentsPage() {
           {uploads.map((upload) => (
             <div
               key={upload.id}
-              className={`flex items-center gap-4 rounded-2xl border p-4 ${
+              className={`flex items-center gap-3 rounded-2xl border p-3 sm:gap-4 sm:p-4 ${
                 upload.status === "failed"
                   ? "border-red-200 bg-red-50"
                   : "border-[#e2e7e4]"
@@ -257,13 +323,13 @@ export default function DocumentsPage() {
           {documents.map((document) => (
             <div
               key={document.id}
-              className="flex items-center gap-4 rounded-2xl border border-[#e2e7e4] p-4"
+              className="flex items-start gap-3 rounded-2xl border border-[#e2e7e4] p-3 sm:items-center sm:gap-4 sm:p-4"
             >
               <div className="grid size-10 place-items-center rounded-xl bg-[#e8f0ff] text-[#3767bd]">
                 <File size={18} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
                   <p className="truncate text-sm font-semibold">
                     {document.filename}
                   </p>
@@ -287,7 +353,7 @@ export default function DocumentsPage() {
                   {document.character_count.toLocaleString()} characters
                 </p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1">
                 {document.status === "failed" && (
                   <button
                     onClick={() => void reindex(document)}
@@ -310,5 +376,41 @@ export default function DocumentsPage() {
         </div>
       </section>
     </AppShell>
+  );
+}
+
+function NextAction({
+  href,
+  icon: Icon,
+  title,
+  text,
+  primary = false,
+}: {
+  href: string;
+  icon: typeof MessageSquareText;
+  title: string;
+  text: string;
+  primary?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex items-center gap-3 rounded-2xl border p-3.5 transition hover:-translate-y-0.5 ${
+        primary
+          ? "border-[#c8f169] bg-[#c8f169] text-[#17321f]"
+          : "border-white/10 bg-white/[0.07] hover:bg-white/[0.12]"
+      }`}
+    >
+      <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${primary ? "bg-[#173a29] text-[#c8f169]" : "bg-white/10"}`}>
+        <Icon size={16} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className={`block text-[10px] ${primary ? "text-[#31533e]" : "text-white/50"}`}>
+          {text}
+        </span>
+      </span>
+      <ArrowRight size={15} className="shrink-0 transition group-hover:translate-x-0.5" />
+    </Link>
   );
 }

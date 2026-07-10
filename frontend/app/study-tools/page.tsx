@@ -10,9 +10,10 @@ import {
   Play,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell, PageHeading } from "@/components/app-shell";
 import { MarkdownText } from "@/components/markdown-text";
+import { StudyFlow } from "@/components/study-flow";
 import { useStudyWorkspace } from "@/components/study-workspace-provider";
 import {
   DocumentRecord,
@@ -38,6 +39,7 @@ export default function StudyToolsPage() {
   const [topic, setTopic] = useState("");
   const [error, setError] = useState("");
   const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const queryWorkspaceRef = useRef<string | null>(null);
   const { jobs, selectedJob, enqueue, selectJob } = useStudyJobs();
   const { activeWorkspace } = useStudyWorkspace();
   const activeJobs = jobs.filter(
@@ -53,7 +55,21 @@ export default function StudyToolsPage() {
           (document) => document.status === "indexed",
         );
         setDocuments(indexed);
-        setSelectedIds(indexed.map((document) => document.id));
+        const query = new URLSearchParams(window.location.search);
+        const requestedIds = (query.get("sources") ?? "")
+          .split(",")
+          .filter((id) => indexed.some((document) => document.id === id));
+        setSelectedIds(
+          requestedIds.length
+            ? requestedIds
+            : indexed.map((document) => document.id),
+        );
+        const requestedTool = tools.find((tool) => tool.id === query.get("tool"));
+        if (requestedTool && queryWorkspaceRef.current !== activeWorkspace.id) {
+          setActiveTool(requestedTool);
+          selectJob(null);
+        }
+        queryWorkspaceRef.current = activeWorkspace.id;
       })
       .catch((loadError) => {
         setError(
@@ -98,16 +114,17 @@ export default function StudyToolsPage() {
     <AppShell>
       <PageHeading
         section="Study tools"
-        title="Turn topics into practice"
-        description={`Create summaries, questions, flashcards, and plans from ${activeWorkspace?.title ?? "this study session"}.`}
+        title="Choose how you want to study"
+        description={`Your sources from ${activeWorkspace?.title ?? "this study session"} are ready. Pick an activity and make it your own.`}
       />
-      <div className="mt-7 grid gap-6 xl:grid-cols-[320px_1fr]">
+      <StudyFlow current="activity" hasSources={documents.length > 0} />
+      <div className="mt-5 grid gap-5 xl:grid-cols-[320px_1fr]">
         <div className="space-y-6">
           <section className="rounded-3xl border border-[#dfe5e1] bg-white p-4">
             <p className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7c8982]">
               Choose a tool
             </p>
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 xl:grid-cols-1">
               {tools.map((tool) => (
                 <button
                   key={tool.id}
@@ -116,7 +133,7 @@ export default function StudyToolsPage() {
                     selectJob(null);
                     setError("");
                   }}
-                  className={`flex w-full items-center gap-3 rounded-2xl p-4 text-left text-sm font-medium transition ${
+                  className={`flex w-full items-center gap-2.5 rounded-2xl p-3 text-left text-xs font-medium transition sm:p-4 sm:text-sm ${
                     activeTool.id === tool.id
                       ? "bg-[#173a29] text-white"
                       : "hover:bg-[#f3f6f3]"
@@ -239,8 +256,8 @@ export default function StudyToolsPage() {
             </section>
           )}
         </div>
-        <section className="rounded-3xl border border-[#dfe5e1] bg-white p-6">
-          <div className="flex items-center justify-between">
+        <section className="rounded-3xl border border-[#dfe5e1] bg-white p-4 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold">{activeTool.label} generator</h2>
               <p className="mt-1 text-xs text-[#7c8982]">
@@ -262,7 +279,7 @@ export default function StudyToolsPage() {
           <button
             onClick={() => void generate()}
             disabled={selectedIds.length === 0}
-            className="mt-3 flex items-center gap-2 rounded-xl bg-[#c8f169] px-5 py-3 text-sm font-semibold text-[#17321f] disabled:opacity-40"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c8f169] px-5 py-3.5 text-sm font-semibold text-[#17321f] disabled:opacity-40 sm:w-auto sm:justify-start sm:py-3"
           >
             {activeJobs.length > 0 ? (
               <span className="size-4 animate-spin rounded-full border-2 border-[#17321f]/20 border-t-[#17321f]" />
