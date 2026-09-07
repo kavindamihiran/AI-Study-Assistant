@@ -8,8 +8,12 @@ from .models import (
     DocumentChunkModel,
     DocumentModel,
     ModelRunModel,
+    OAuthAuthorizationCodeModel,
+    OAuthClientModel,
+    OAuthTokenModel,
     StudySessionModel,
     UserModel,
+    UserModelSettingModel,
 )
 
 __all__ = [
@@ -22,6 +26,10 @@ __all__ = [
     "DocumentChunkModel",
     "DocumentModel",
     "ModelRunModel",
+    "OAuthAuthorizationCodeModel",
+    "OAuthClientModel",
+    "OAuthTokenModel",
     "StudySessionModel",
     "UserModel",
+    "UserModelSettingModel",
 ]

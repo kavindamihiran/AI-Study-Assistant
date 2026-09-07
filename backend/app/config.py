@@ -17,6 +17,9 @@ DEFAULT_EMBEDDING_DIMENSION = 384
 DEFAULT_HOSTED_EMBEDDING_MODEL_ID = ""
 DEFAULT_AUTH_SESSION_DAYS = 7
 DEFAULT_AUTH_COOKIE_NAME = "studyos_session"
+DEFAULT_SECRET_ENCRYPTION_KEY = ""
+DEFAULT_MCP_ACCESS_TOKEN_MINUTES = 60
+DEFAULT_MCP_REFRESH_TOKEN_DAYS = 30
 
 
 def _parse_env_line(line: str) -> tuple[str, str] | None:
@@ -81,6 +84,12 @@ class Settings:
     auth_cookie_secure: bool = False
     auth_cookie_samesite: str = "lax"
     auth_registration_enabled: bool = True
+    secret_encryption_key: str = DEFAULT_SECRET_ENCRYPTION_KEY
+    public_base_url: str = ""
+    mcp_enabled: bool = True
+    mcp_signing_secret: str = ""
+    mcp_access_token_minutes: int = DEFAULT_MCP_ACCESS_TOKEN_MINUTES
+    mcp_refresh_token_days: int = DEFAULT_MCP_REFRESH_TOKEN_DAYS
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -139,5 +148,23 @@ class Settings:
             ).lower(),
             auth_registration_enabled=_env_bool(
                 "AUTH_REGISTRATION_ENABLED", True
+            ),
+            secret_encryption_key=os.getenv(
+                "SECRET_ENCRYPTION_KEY", DEFAULT_SECRET_ENCRYPTION_KEY
+            ),
+            public_base_url=os.getenv("PUBLIC_BASE_URL", ""),
+            mcp_enabled=_env_bool("MCP_ENABLED", True),
+            mcp_signing_secret=os.getenv("MCP_SIGNING_SECRET", ""),
+            mcp_access_token_minutes=int(
+                os.getenv(
+                    "MCP_ACCESS_TOKEN_MINUTES",
+                    str(DEFAULT_MCP_ACCESS_TOKEN_MINUTES),
+                )
+            ),
+            mcp_refresh_token_days=int(
+                os.getenv(
+                    "MCP_REFRESH_TOKEN_DAYS",
+                    str(DEFAULT_MCP_REFRESH_TOKEN_DAYS),
+                )
             ),
         )

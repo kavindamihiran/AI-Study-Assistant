@@ -88,6 +88,73 @@ export type SystemStatus = {
   database: string;
 };
 
+export type ModelProviderPreset = {
+  id: string;
+  label: string;
+  base_url: string;
+  example_model_id: string;
+  api_key_url: string;
+};
+
+export type CustomModelSettings = {
+  configured: boolean;
+  is_enabled: boolean;
+  display_name?: string;
+  provider_name?: string;
+  base_url?: string;
+  model_id?: string;
+  api_key_hint?: string;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+  max_context_tokens?: number;
+  supports_streaming?: boolean;
+  supports_system_message?: boolean;
+  supports_json_mode?: boolean;
+  fallback_to_managed?: boolean;
+  last_verified_at?: string | null;
+  last_error?: string | null;
+};
+
+export type ModelSettingsResponse = {
+  managed: { configured: boolean; display_name: string; description: string };
+  custom: CustomModelSettings;
+  presets: ModelProviderPreset[];
+  active_source: "custom" | "managed";
+};
+
+export type ModelSettingsInput = {
+  display_name: string;
+  provider_name: string;
+  base_url: string;
+  model_id: string;
+  api_key?: string | null;
+  temperature: number;
+  top_p: number;
+  max_tokens: number;
+  max_context_tokens: number;
+  supports_streaming: boolean;
+  supports_system_message: boolean;
+  supports_json_mode: boolean;
+  fallback_to_managed: boolean;
+  is_enabled: boolean;
+};
+
+export type ModelTestInput = {
+  base_url?: string;
+  model_id?: string;
+  api_key?: string | null;
+  supports_system_message?: boolean;
+};
+
+export type ModelTestResult = {
+  ok: boolean;
+  text?: string;
+  latency_ms?: number;
+  error_type?: string | null;
+  error_message?: string | null;
+};
+
 export type AuthUser = {
   id: string;
   email: string;
@@ -100,7 +167,7 @@ type AuthResponse = {
 };
 
 const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-const API_BASE_URL = configuredApiBaseUrl
+export const API_BASE_URL = configuredApiBaseUrl
   ? (
       configuredApiBaseUrl.startsWith("http://") ||
       configuredApiBaseUrl.startsWith("https://")
@@ -308,5 +375,73 @@ export function generateStudyTool(
       count: tool === "mcq" ? 5 : 8,
       days: 7,
     }),
+  });
+}
+
+export function getModelSettings(): Promise<ModelSettingsResponse> {
+  return request<ModelSettingsResponse>("/api/settings/model");
+}
+
+export function saveModelSettings(
+  payload: ModelSettingsInput,
+): Promise<ModelSettingsResponse> {
+  return request<ModelSettingsResponse>("/api/settings/model", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteModelSettings(): Promise<ModelSettingsResponse> {
+  return request<ModelSettingsResponse>("/api/settings/model", {
+    method: "DELETE",
+  });
+}
+
+export function testModelSettings(
+  payload: ModelTestInput,
+): Promise<ModelTestResult> {
+  return request<ModelTestResult>("/api/settings/model/test", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listProviderModels(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<string[]> {
+  const response = await request<{ models: string[] }>(
+    "/api/settings/model/catalog",
+    {
+      method: "POST",
+      body: JSON.stringify({ base_url: baseUrl, api_key: apiKey || null }),
+    },
+  );
+  return response.models;
+}
+
+export type MCPConnection = {
+  grant_id: string;
+  client_id: string;
+  client_name: string;
+  scope: string;
+  created_at: string;
+  expires_at: string;
+  last_used_at: string | null;
+};
+
+/** The URL a student pastes into Claude or ChatGPT to add StudyOS. */
+export const MCP_SERVER_URL = `${API_BASE_URL}/mcp`;
+
+export async function listMcpConnections(): Promise<MCPConnection[]> {
+  const response = await request<{ connections: MCPConnection[] }>(
+    "/api/mcp/connections",
+  );
+  return response.connections;
+}
+
+export function revokeMcpConnection(grantId: string): Promise<void> {
+  return request<void>(`/api/mcp/connections/${grantId}`, {
+    method: "DELETE",
   });
 }

@@ -25,6 +25,7 @@ backend/.tmp/
 backend/.tmp-api/
 backend/tests/.tmp/
 backend/tests/.runtime-data/
+backend/tests/.runtime-data-user-models/
 backend/pytest-cache-files-*/
 backend/data/
 

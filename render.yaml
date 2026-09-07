@@ -43,6 +43,17 @@ services:
         value: none
       - key: AUTH_REGISTRATION_ENABLED
         value: "true"
+      - key: SECRET_ENCRYPTION_KEY
+        generateValue: true
+      - key: MCP_ENABLED
+        value: "true"
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: studyos-api
+          property: host
+      - key: MCP_SIGNING_SECRET
+        generateValue: true
 
   - type: web
     name: studyos-web

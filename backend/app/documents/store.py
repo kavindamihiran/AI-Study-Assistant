@@ -603,6 +603,12 @@ class DocumentStore:
                 for chunk in chunks
             ]
 
+    def get_document_chunks(
+        self, document_id: str, *, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Every indexed chunk of one document, in reading order."""
+        return self._load_chunks([document_id], user_id=user_id)
+
     async def retrieve(
         self,
         query: str,

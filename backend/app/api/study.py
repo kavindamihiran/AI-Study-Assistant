@@ -8,7 +8,9 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 from app.documents.store import DocumentStore
 from app.auth import current_auth, require_authenticated_request
 from app.llm.gateway import LLMGateway
-from app.llm.models import ChatMessage, NormalizedLLMResponse
+from app.llm.models import ChatMessage, ModelProfile, NormalizedLLMResponse
+
+from .model_context import resolve_model_for_user
 
 
 router = APIRouter(
@@ -121,15 +123,25 @@ def _record_run(
     )
 
 
-async def _generate(
+async def run_study_tool(
     tool: Literal["summary", "mcq", "flashcards", "plan"],
     payload: StudyRequest,
-    request: Request,
+    *,
+    store: DocumentStore,
+    gateway: LLMGateway,
+    user_id: str,
+    profile_override: ModelProfile | None = None,
+    profile_id: str | None = None,
 ) -> dict[str, Any]:
-    store: DocumentStore = request.app.state.document_store
-    gateway: LLMGateway = request.app.state.llm_gateway
-    user_id = current_auth(request).user_id
-    profile_id = gateway.active_profile_id
+    """Generate one study artefact from the user's indexed notes.
+
+    Shared by the HTTP routes and the MCP server so both stay in sync.
+    Failures are raised as HTTPException; the MCP layer maps them to tool errors.
+    ``profile_override`` carries the model the student configured for themselves;
+    without one the server-managed profile generates the material.
+    """
+    profile_id = profile_id or gateway.active_profile_id
+    override_id = None if profile_override else profile_id
     focus = payload.topic.strip() if payload.topic and payload.topic.strip() else None
     chunks = await store.get_study_chunks(
         document_ids=list(dict.fromkeys(payload.document_ids)),
@@ -163,7 +175,8 @@ async def _generate(
         )
         result = await gateway.generate_text(
             [system, ChatMessage("user", prompt)],
-            profile_id=profile_id,
+            profile_id=override_id,
+            profile_override=profile_override,
             max_tokens=3000,
         )
         text = result.text
@@ -176,7 +189,8 @@ async def _generate(
         )
         result = await gateway.generate_text(
             [system, ChatMessage("user", prompt)],
-            profile_id=profile_id,
+            profile_id=override_id,
+            profile_override=profile_override,
             max_tokens=2600,
         )
         text = result.text
@@ -192,7 +206,8 @@ async def _generate(
         )
         result = await gateway.generate_json(
             [system, ChatMessage("user", prompt)],
-            profile_id=profile_id,
+            profile_id=override_id,
+            profile_override=profile_override,
             max_tokens=3500,
         )
         text = ""
@@ -216,7 +231,8 @@ async def _generate(
         )
         result = await gateway.generate_json(
             [system, ChatMessage("user", prompt)],
-            profile_id=profile_id,
+            profile_id=override_id,
+            profile_override=profile_override,
             max_tokens=3000,
         )
         text = ""
@@ -245,6 +261,24 @@ async def _generate(
         "citations": _citations(chunks),
         "latency_ms": result.latency_ms,
     }
+
+
+async def _generate(
+    tool: Literal["summary", "mcq", "flashcards", "plan"],
+    payload: StudyRequest,
+    request: Request,
+) -> dict[str, Any]:
+    user_id = current_auth(request).user_id
+    profile_override, profile_id = resolve_model_for_user(request, user_id)
+    return await run_study_tool(
+        tool,
+        payload,
+        store=request.app.state.document_store,
+        gateway=request.app.state.llm_gateway,
+        user_id=user_id,
+        profile_override=profile_override,
+        profile_id=profile_id,
+    )
 
 
 @router.post("/summary")
