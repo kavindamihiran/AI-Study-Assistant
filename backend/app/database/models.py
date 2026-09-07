@@ -63,6 +63,50 @@ class AuthSessionModel(Base):
     user: Mapped[UserModel] = relationship(back_populates="auth_sessions")
 
 
+class UserModelSettingModel(Base):
+    """A student's own OpenAI-compatible provider credentials and model choice."""
+
+    __tablename__ = "user_model_settings"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    provider_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    base_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    api_key_hint: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    temperature: Mapped[float] = mapped_column(Float, default=0.2, nullable=False)
+    top_p: Mapped[float] = mapped_column(Float, default=0.95, nullable=False)
+    max_tokens: Mapped[int] = mapped_column(Integer, default=2048, nullable=False)
+    max_context_tokens: Mapped[int] = mapped_column(
+        Integer, default=32768, nullable=False
+    )
+    supports_streaming: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    supports_system_message: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    supports_json_mode: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    fallback_to_managed: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now
+    )
+
+
 class StudySessionModel(Base):
     __tablename__ = "study_sessions"
 
@@ -241,3 +285,85 @@ class ModelRunModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
+
+
+class OAuthClientModel(Base):
+    """An MCP client (Claude, ChatGPT, …) registered through RFC 7591."""
+
+    __tablename__ = "oauth_clients"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    redirect_uris_json: Mapped[str] = mapped_column(Text, nullable=False)
+    grant_types_json: Mapped[str] = mapped_column(Text, nullable=False)
+    scope: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    client_uri: Mapped[str | None] = mapped_column(String(512))
+    logo_uri: Mapped[str | None] = mapped_column(String(512))
+    token_endpoint_auth_method: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="none"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
+
+
+class OAuthAuthorizationCodeModel(Base):
+    """A short-lived PKCE authorization code awaiting exchange."""
+
+    __tablename__ = "oauth_authorization_codes"
+
+    code_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    client_id: Mapped[str] = mapped_column(
+        ForeignKey("oauth_clients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    redirect_uri: Mapped[str] = mapped_column(String(512), nullable=False)
+    code_challenge: Mapped[str] = mapped_column(String(255), nullable=False)
+    code_challenge_method: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="S256"
+    )
+    scope: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    resource: Mapped[str | None] = mapped_column(String(512))
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+
+
+class OAuthTokenModel(Base):
+    """An issued access or refresh token, stored only as a SHA-256 hash."""
+
+    __tablename__ = "oauth_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    token_hash: Mapped[str] = mapped_column(
+        String(64), unique=True, nullable=False, index=True
+    )
+    token_type: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    client_id: Mapped[str] = mapped_column(
+        ForeignKey("oauth_clients.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    scope: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    grant_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

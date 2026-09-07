@@ -85,8 +85,19 @@ class LLMGateway:
         self.transport = transport
         self.active_profile_id = active_profile_id
 
-    def resolve_profile(self, profile_id: str | None = None) -> ModelProfile:
-        profile = self.registry.get(profile_id or self.active_profile_id)
+    def resolve_profile(
+        self,
+        profile_id: str | None = None,
+        *,
+        override: ModelProfile | None = None,
+    ) -> ModelProfile:
+        """Resolve a registry profile, or validate a caller-supplied one.
+
+        ``override`` carries a profile built from a student's own provider
+        settings; such a profile never lives in the shared registry because it
+        is scoped to a single user.
+        """
+        profile = override or self.registry.get(profile_id or self.active_profile_id)
         if not profile.is_configured:
             raise ProfileConfigurationError(
                 f"Model profile {profile.profile_id} is missing its model ID or base URL"
@@ -160,12 +171,13 @@ class LLMGateway:
         max_tokens: int | None = None,
         extra_body: Mapping[str, Any] | None = None,
         use_fallback: bool = True,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         started = time.perf_counter()
         profile: ModelProfile | None = None
         retry_count = 0
         try:
-            profile = self.resolve_profile(profile_id)
+            profile = self.resolve_profile(profile_id, override=profile_override)
             body = self._request_body(
                 profile,
                 messages,
@@ -221,9 +233,10 @@ class LLMGateway:
         *,
         profile_id: str | None = None,
         max_tokens: int | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         try:
-            profile = self.resolve_profile(profile_id)
+            profile = self.resolve_profile(profile_id, override=profile_override)
         except LLMGatewayError as exc:
             return NormalizedLLMResponse(
                 profile_id=profile_id,
@@ -247,9 +260,10 @@ class LLMGateway:
         )
         result = await self.generate_text(
             first_messages,
-            profile_id=profile.profile_id,
+            profile_id=None if profile_override else profile.profile_id,
             max_tokens=max_tokens,
             extra_body=extra_body,
+            profile_override=profile_override,
         )
         if not result.ok:
             return result
@@ -271,9 +285,10 @@ class LLMGateway:
         )
         retried = await self.generate_text(
             strict_messages,
-            profile_id=profile.profile_id,
+            profile_id=None if profile_override else profile.profile_id,
             temperature=0,
             max_tokens=max_tokens,
+            profile_override=profile_override,
         )
         retried.retry_count += result.retry_count + 1
         if not retried.ok:
@@ -291,11 +306,15 @@ class LLMGateway:
         *,
         profile_id: str | None = None,
         max_tokens: int | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> AsyncIterator[str]:
-        profile = self.resolve_profile(profile_id)
+        profile = self.resolve_profile(profile_id, override=profile_override)
         if not profile.capabilities.streaming:
             response = await self.generate_text(
-                messages, profile_id=profile.profile_id, max_tokens=max_tokens
+                messages,
+                profile_id=None if profile_override else profile.profile_id,
+                max_tokens=max_tokens,
+                profile_override=profile_override,
             )
             if response.ok and response.text:
                 yield response.text
@@ -324,7 +343,11 @@ class LLMGateway:
             yield visible
 
     async def classify_intent(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_json(
             [
@@ -333,10 +356,15 @@ class LLMGateway:
             ],
             profile_id=profile_id,
             max_tokens=256,
+            profile_override=profile_override,
         )
 
     async def rewrite_query(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_text(
             [
@@ -349,34 +377,58 @@ class LLMGateway:
             profile_id=profile_id,
             temperature=0,
             max_tokens=256,
+            profile_override=profile_override,
         )
 
     async def generate_answer(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_text(
-            [ChatMessage("user", prompt)], profile_id=profile_id
+            [ChatMessage("user", prompt)],
+            profile_id=profile_id,
+            profile_override=profile_override,
         )
 
     async def generate_summary(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_text(
-            [ChatMessage("user", prompt)], profile_id=profile_id
+            [ChatMessage("user", prompt)],
+            profile_id=profile_id,
+            profile_override=profile_override,
         )
 
     async def generate_mcqs(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_json(
-            [ChatMessage("user", prompt)], profile_id=profile_id
+            [ChatMessage("user", prompt)],
+            profile_id=profile_id,
+            profile_override=profile_override,
         )
 
     async def grade_groundedness(
-        self, prompt: str, *, profile_id: str | None = None
+        self,
+        prompt: str,
+        *,
+        profile_id: str | None = None,
+        profile_override: ModelProfile | None = None,
     ) -> NormalizedLLMResponse:
         return await self.generate_json(
             [ChatMessage("user", prompt)],
             profile_id=profile_id,
             max_tokens=256,
+            profile_override=profile_override,
         )

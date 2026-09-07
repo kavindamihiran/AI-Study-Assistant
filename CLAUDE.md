@@ -40,7 +40,7 @@ API docs while the backend runs: `http://127.0.0.1:8000/docs`.
 
 Backend config is read only through `Settings.from_env()` (`backend/app/config.py`), which loads `.env` / `.env.local` from both the repo root and `backend/` with `os.environ.setdefault` — real process env always wins. Add new settings as a dataclass field plus an `os.getenv` line there; never read `os.getenv` from feature code.
 
-Minimum to run: `AI_API_KEY`, `AI_BASE_URL`, `AI_DEFAULT_MODEL_ID`. Without `DATABASE_URL` the app falls back to SQLite at `backend/data/study_assistant.db`. The frontend needs `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://127.0.0.1:8000`); it is baked in at build time because the app is statically exported.
+Minimum to run: `AI_API_KEY`, `AI_BASE_URL`, `AI_DEFAULT_MODEL_ID` — or nothing at all, if every user brings their own key through Settings (see "Per-user models"). `SECRET_ENCRYPTION_KEY` encrypts those saved keys; without it a key file is generated under `DATA_DIR`. Without `DATABASE_URL` the app falls back to SQLite at `backend/data/study_assistant.db`. The frontend needs `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://127.0.0.1:8000`); it is baked in at build time because the app is statically exported.
 
 ## Backend architecture
 
@@ -48,10 +48,11 @@ Minimum to run: `AI_API_KEY`, `AI_BASE_URL`, `AI_DEFAULT_MODEL_ID`. Without `DAT
 
 ### Layers
 
-- `app/api/` — FastAPI routers (`/api/auth`, `/api/documents`, `/api/chat`, `/api/study`, `/api/study-sessions`). Routers hold prompt construction and HTTP mapping only.
+- `app/api/` — FastAPI routers (`/api/auth`, `/api/documents`, `/api/chat`, `/api/study`, `/api/study-sessions`, `/api/settings/model`). Routers hold prompt construction and HTTP mapping only.
 - `app/llm/` — the gateway (see below).
 - `app/documents/store.py` — `DocumentStore`, the main data-access object: study sessions, documents, chunks, chat sessions/messages, model runs, plus retrieval. Nearly everything persistence-related goes through it.
 - `app/rag/` — `EmbeddingProvider` (local feature-hashing or hosted) and `VectorStore` (SQL-backed or Pinecone), both duck-typed protocols selected by env.
+- `app/security/` — `SecretBox`, stdlib-only authenticated encryption for secrets stored in the database.
 - `app/database/` — SQLAlchemy 2 models and the `Database` wrapper (`session()` contextmanager commits on exit, rolls back on exception).
 
 ### Auth and per-user scoping (invariant)
@@ -70,6 +71,27 @@ Provider and model identity are deliberately hidden from clients: `ModelProfile.
 
 Every model call should be followed by `store.record_model_run(...)` (latency, tokens, retries, status) before the response is returned — see `app/api/chat.py` and `app/api/study.py`.
 
+### Per-user models
+
+Students can point StudyOS at their own OpenAI-compatible endpoint. `app/llm/user_models.py`
+holds `UserModelStore` (one `user_model_settings` row per user, API key encrypted with
+`SecretBox`) and `build_user_profile`, which turns those settings into a `ModelProfile` that
+never enters the shared registry. `ModelProfile.api_key_value` carries the key so the
+transport does not read the environment for it.
+
+`app/api/model_context.py` is the single place routers ask which model to use:
+`resolve_model_for_user(request, user_id)` returns `(profile_override, profile_id)` — the
+override when the user saved a usable config, otherwise `None` plus the managed profile id,
+and a 503 when neither is configured. Pass `profile_override=` down every gateway call
+(`generate_text`, `generate_json`, `generate_stream` and their wrappers all accept it) and
+`profile_id=None` alongside it. The user's profile keeps the managed profile as its
+`fallback_model_profile_id` unless they opted out, so the existing failure ladder covers
+provider outages.
+
+`/api/settings/model` (GET/PUT/DELETE, plus `POST /test` and `POST /catalog`) is the only
+route that touches these settings; it returns `public_dict()`, which carries a masked key
+hint and never the key itself.
+
 ### RAG
 
 Ingestion (`DocumentStore.ingest`): extract per-page sections (pypdf / python-docx / decoded text) → 700-word chunks with 100-word overlap → embed → upsert vectors → flip document status to `indexed` (or `failed`, with the error persisted). Blocking work is pushed through `asyncio.to_thread`.
@@ -77,6 +99,32 @@ Ingestion (`DocumentStore.ingest`): extract per-page sections (pypdf / python-do
 Retrieval (`DocumentStore.retrieve`) is hybrid: `0.72 * cosine + 0.28 * lexical-overlap`, with a `+0.35` lexical bonus for an exact phrase hit; candidates below a vector floor with no lexical signal are dropped. Study-tool generation instead uses `get_study_chunks`, which builds a *document-balanced* context under a character budget so one long upload cannot crowd out the others, optionally reserving a third of the budget for focus-matched chunks.
 
 The "General study session" (or the oldest one) is treated as the default workspace: queries for it also match rows with a `NULL` `study_session_id`, which is how pre-workspace data stays visible. `_is_default_study_session` encodes this.
+
+### MCP server
+
+`app/mcp/` exposes StudyOS to Claude, ChatGPT and other MCP clients at `POST /mcp`,
+mounted by `create_app()` when `MCP_ENABLED` is true. It is stateless Streamable
+HTTP: one JSON-RPC message per request, one JSON response, no SSE stream.
+
+- `oauth.py` — the backend is its own OAuth 2.1 authorization server: dynamic
+  client registration, authorization code + PKCE (`S256` required), rotating
+  refresh tokens, revocation. Tokens are opaque and stored only as SHA-256
+  hashes in `oauth_tokens`.
+- `routes.py` — discovery documents, `/oauth/*` (the sign-in and consent page is
+  served by the backend, carrying a signed short-lived login ticket because the
+  consent POST is cross-site), the `/mcp` endpoint, and `/api/mcp/connections`
+  for the web app.
+- `protocol.py` — JSON-RPC dispatch. Tool *execution* failures come back as a
+  result with `isError`; only protocol faults become JSON-RPC errors.
+- `tools.py` — the tool catalogue. Handlers receive a `ToolContext` (store,
+  gateway, `user_id`, and a `resolve_model` callable) and must pass `user_id`
+  into every store call, the same per-user scoping invariant as the routers.
+
+New MCP tools that generate text call `run_chat` / `run_study_tool` from
+`app/api/chat.py` and `app/api/study.py` rather than re-implementing prompts, and
+pass the `profile_override` from `context.resolve_model()` so a student's own
+model is used. `MCPCorsMiddleware` (added last, so it wraps the credentialed
+`CORSMiddleware`) opens CORS on the bearer-authenticated MCP and OAuth paths only.
 
 ### Schema changes
 

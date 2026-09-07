@@ -138,6 +138,28 @@ Profiles are configured in
 `backend/app/llm/profiles.json`, while real credentials and model IDs remain in
 environment variables.
 
+## Use StudyOS from Claude or ChatGPT
+
+StudyOS exposes a remote **MCP server**, so a student can connect their account
+to Claude, ChatGPT, or any other MCP client and search their notes, ask grounded
+questions, and generate study material without leaving that chat.
+
+Paste this address as a custom connector (Settings → Connected chat apps shows
+it, and lists every app that has access):
+
+```text
+https://<your-backend-host>/mcp
+```
+
+The client registers itself, the student signs in to StudyOS and approves the
+connection, and it receives an OAuth token scoped to that one account. Tools
+include `list_documents`, `search_notes`, `ask_notes`, `add_note`,
+`generate_summary`, `generate_flashcards`, `generate_mcqs` and
+`generate_study_plan`.
+
+See [MCP.md](MCP.md) for the tool catalogue, the OAuth design, and the
+configuration variables.
+
 ## Security Model
 
 StudyOS uses account-scoped data access:
@@ -184,6 +206,7 @@ backend/
   app/database/     SQLAlchemy models and engine
   app/documents/    Extraction, chunking, and ingestion
   app/llm/          Model profiles, gateway, transport, normalization
+  app/mcp/          Remote MCP server and its OAuth 2.1 provider
   app/rag/          Embeddings and vector stores
   tests/            Backend and API tests
 
@@ -195,6 +218,7 @@ frontend/
 docker-compose.yml  Local PostgreSQL
 render.yaml         Free deployment Blueprint
 DEPLOY_FREE.md      Complete hosting guide
+MCP.md              Connecting StudyOS to Claude and ChatGPT
 ```
 
 ## Local Setup
@@ -220,7 +244,26 @@ ACTIVE_MODEL_PROFILE_ID=study_ai_default
 FRONTEND_URL=http://127.0.0.1:3200
 AUTH_COOKIE_SECURE=false
 AUTH_COOKIE_SAMESITE=lax
+SECRET_ENCRYPTION_KEY=a-long-random-string
 ```
+
+### Bring your own model
+
+The server-wide `AI_*` values above are optional. Each signed-in student can open
+**Settings -> Your AI model** and point StudyOS at any OpenAI-compatible endpoint
+with their own key: NVIDIA NIM, OpenAI, OpenRouter, Groq, Together, Mistral,
+DeepSeek, or a local server such as Ollama or LM Studio. The page can list the
+models a provider serves, test the connection before saving, and expose the
+capability switches (streaming, system role, JSON mode) for models that do not
+accept every request field.
+
+Chat and study tools then run on that model. If the provider fails and the
+student left "Fall back to the shared assistant" on, the request is retried on
+the server-configured model; when no server model is configured, the shared
+model is simply unavailable and the student's own key is required.
+
+Saved keys are encrypted at rest with `SECRET_ENCRYPTION_KEY` and are never
+returned to the browser - the Settings page only shows a masked hint.
 
 Without `DATABASE_URL`, the application uses
 `backend/data/study_assistant.db`.
@@ -267,14 +310,15 @@ npm run build
 Current verified status:
 
 ```text
-Backend: 23 tests passed
+Backend: 56 tests passed
 Frontend: production static build passed
 ```
 
 Tests cover the model registry, capability checks, retries, fallback routing,
 response normalization, hidden-reasoning filtering, JSON repair, extraction,
 chunking, embeddings, retrieval, document APIs, citations, study generation,
-chat persistence, and session deletion.
+chat persistence, session deletion, and the MCP server (OAuth flow, PKCE,
+refresh rotation, revocation, tool dispatch, and cross-account isolation).
 
 ## Deployment
 

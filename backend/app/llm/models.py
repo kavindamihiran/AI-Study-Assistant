@@ -51,10 +51,14 @@ class ModelProfile:
     prompt_style: str = "default"
     fallback_model_profile_id: str | None = None
     enabled: bool = True
+    # Set only for per-user profiles built from settings the student saved;
+    # server profiles keep reading their key from the environment.
+    api_key_value: str | None = None
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.base_url and self.model_id and self.api_key_env_name)
+        has_key = bool(self.api_key_value or self.api_key_env_name)
+        return bool(self.base_url and self.model_id and has_key)
 
     def public_dict(self) -> dict[str, Any]:
         return {

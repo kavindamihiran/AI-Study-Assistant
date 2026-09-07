@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.documents.store import DocumentStore
 from app.auth import current_auth, require_authenticated_request
 from app.llm.gateway import LLMGateway
-from app.llm.models import ChatMessage
+from app.llm.models import ChatMessage, ModelProfile
+
+from .model_context import resolve_model_for_user
 
 
 router = APIRouter(
@@ -24,12 +28,23 @@ class ChatRequest(BaseModel):
     study_session_id: str | None = None
 
 
-@router.post("")
-async def chat(payload: ChatRequest, request: Request) -> dict:
-    store: DocumentStore = request.app.state.document_store
-    gateway: LLMGateway = request.app.state.llm_gateway
-    user_id = current_auth(request).user_id
-    profile_id = CHAT_PROFILE_ID
+async def run_chat(
+    payload: ChatRequest,
+    *,
+    store: DocumentStore,
+    gateway: LLMGateway,
+    user_id: str,
+    profile_override: ModelProfile | None = None,
+    profile_id: str | None = None,
+) -> dict[str, Any]:
+    """Answer a question from the user's notes.
+
+    Shared by the HTTP route and the MCP server, so both stay in sync.
+    Failures are raised as HTTPException; the MCP layer maps them to tool errors.
+    ``profile_override`` carries the model the student configured for themselves;
+    without one the server-managed profile answers.
+    """
+    profile_id = profile_id or CHAT_PROFILE_ID
     try:
         session_id = store.ensure_chat_session(
             session_id=payload.session_id,
@@ -96,7 +111,8 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
             ),
             ChatMessage("user", prompt),
         ],
-        profile_id=profile_id,
+        profile_id=None if profile_override else profile_id,
+        profile_override=profile_override,
     )
     store.record_model_run(
         session_id=session_id,
@@ -140,6 +156,20 @@ async def chat(payload: ChatRequest, request: Request) -> dict:
         "citations": citations,
         "latency_ms": result.latency_ms,
     }
+
+
+@router.post("")
+async def chat(payload: ChatRequest, request: Request) -> dict:
+    user_id = current_auth(request).user_id
+    profile_override, profile_id = resolve_model_for_user(request, user_id)
+    return await run_chat(
+        payload,
+        store=request.app.state.document_store,
+        gateway=request.app.state.llm_gateway,
+        user_id=user_id,
+        profile_override=profile_override,
+        profile_id=profile_id,
+    )
 
 
 @router.get("/sessions")

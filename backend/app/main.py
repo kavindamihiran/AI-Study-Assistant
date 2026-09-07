@@ -10,6 +10,7 @@ from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.study import router as study_router
 from app.api.study_sessions import router as study_sessions_router
+from app.api.user_models import router as user_models_router
 from app.config import Settings
 from app.auth import AuthService
 from app.database import Database
@@ -17,6 +18,9 @@ from app.documents.store import DocumentStore
 from app.llm.gateway import LLMGateway
 from app.llm.registry import ModelProfileRegistry
 from app.llm.transport import OpenAICompatibleTransport
+from app.mcp import MCPCorsMiddleware, OAuthService, ROUTERS as MCP_ROUTERS
+from app.llm.user_models import UserModelStore
+from app.security import SecretBox
 from app.rag.embeddings import HashingEmbeddingProvider, HostedEmbeddingProvider
 from app.rag.vector_store import LocalSQLVectorStore, PineconeVectorStore
 
@@ -48,6 +52,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     auth_service = AuthService(
         database, session_days=settings.auth_session_days
     )
+    secret_box = SecretBox.from_env_or_file(
+        settings.data_dir / "secret.key",
+        settings.secret_encryption_key,
+    )
+    user_model_store = UserModelStore(database, secret_box)
 
     if settings.embedding_provider == "hosted":
         embedder = HostedEmbeddingProvider(
@@ -86,7 +95,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.auth_service = auth_service
     app.state.database = database
     app.state.document_store = document_store
+    app.state.user_model_store = user_model_store
     app.state.max_upload_bytes = settings.max_upload_mb * 1024 * 1024
+    if settings.mcp_enabled:
+        oauth_service = OAuthService(
+            database,
+            signing_secret=settings.mcp_signing_secret,
+            access_token_minutes=settings.mcp_access_token_minutes,
+            refresh_token_days=settings.mcp_refresh_token_days,
+        )
+        oauth_service.purge_expired()
+        app.state.oauth_service = oauth_service
+    else:
+        app.state.oauth_service = None
     frontend_url = settings.frontend_url.rstrip("/")
     if frontend_url and not frontend_url.startswith(("http://", "https://")):
         frontend_url = f"https://{frontend_url}"
@@ -102,7 +123,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=sorted(allowed_origins),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-CSRF-Token"],
     )
     app.include_router(auth_router)
@@ -110,6 +131,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat_router)
     app.include_router(study_router)
     app.include_router(study_sessions_router)
+    if settings.mcp_enabled:
+        for mcp_router in MCP_ROUTERS:
+            app.include_router(mcp_router)
+        # Added last so it wraps the credentialed CORS middleware and can
+        # answer preflights for the token-authenticated MCP endpoints.
+        app.add_middleware(MCPCorsMiddleware)
+    app.include_router(user_models_router)
 
     @app.get("/health", tags=["health"])
     async def health() -> dict[str, str]:
@@ -123,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "status": "ready" if ai_ready and data_ready else "setup_required",
             "ai_ready": ai_ready,
+            "byo_key_supported": True,
             "data_ready": data_ready,
             "database": "connected" if database.health() else "unavailable",
         }

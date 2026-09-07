@@ -28,6 +28,8 @@ class OpenAICompatibleTransport:
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def _api_key(self, profile: ModelProfile) -> str:
+        if profile.api_key_value:
+            return profile.api_key_value
         api_key = os.getenv(profile.api_key_env_name)
         if not api_key:
             raise ProfileConfigurationError(
