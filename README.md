@@ -52,23 +52,30 @@ keeps model behavior explicit, lightweight, and independently testable.
 ```mermaid
 flowchart LR
     U[Browser] --> F[Next.js Frontend]
-    F -->|REST API| A[FastAPI Backend]
+    F -->|REST API + HttpOnly cookie + CSRF header| AUTH
 
-    A --> D[Document Ingestion]
-    D --> X[PDF / DOCX / Text Extraction]
-    X --> C[Chunking]
-    C --> E[Embedding Provider]
-    E --> V[Vector Store]
+    subgraph API[FastAPI Backend]
+        AUTH[Auth check<br/>session to user_id] --> RT[Routes]
 
-    A --> R[Hybrid RAG Retrieval]
-    R --> V
-    R --> G[LLM Gateway]
-    G --> L[Managed AI Endpoint]
+        RT --> D[Document Ingestion]
+        D --> X[PDF / DOCX / Text Extraction]
+        X --> C[Chunking]
+        C --> E[Embedding Provider]
+        E --> V[(Vector Store)]
 
-    A --> DB[(SQLite / PostgreSQL)]
-    D --> DB
-    R --> DB
-    G --> DB
+        RT -->|1. question + user_id| R[Hybrid RAG Retrieval]
+        R -->|embed query| E
+        R --> V
+        RT -->|2. prompt with top chunks| G[LLM Gateway]
+    end
+
+    G --> L1[User's own model]
+    G -. fallback .-> L2[Managed model]
+
+    D --> DB[(SQLite / PostgreSQL)]
+    R -->|chunks owned by user_id| DB
+    RT -->|record model runs| DB
+    AUTH -->|sessions| DB
 ```
 
 ## RAG Pipeline
