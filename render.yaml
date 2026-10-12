@@ -5,7 +5,7 @@ services:
     plan: free
     region: singapore
     rootDir: backend
-    buildCommand: pip install -e .
+    buildCommand: pip install -e ".[pinecone]"
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeployTrigger: commit
@@ -30,7 +30,13 @@ services:
       - key: MAX_UPLOAD_MB
         value: "25"
       - key: VECTOR_STORE_PROVIDER
-        value: local
+        value: pinecone
+      - key: PINECONE_API_KEY
+        sync: false
+      - key: PINECONE_INDEX_HOST
+        sync: false
+      - key: PINECONE_NAMESPACE
+        value: study-assistant
       - key: EMBEDDING_PROVIDER
         value: local
       - key: EMBEDDING_DIMENSION
